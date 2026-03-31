@@ -6,6 +6,8 @@ MiniCode is a lightweight terminal coding assistant for local development workfl
 
 It focuses on a compact tool loop, practical file operations, and a simple full-screen CLI experience.
 
+One of its main advantages is that it provides Claude Code-like capabilities and architectural ideas in a much lighter implementation, which makes it especially suitable for learning and experimentation.
+
 ## Highlights
 
 - Tool-driven coding loop with multi-step execution in a single turn
@@ -14,6 +16,7 @@ It focuses on a compact tool loop, practical file operations, and a simple full-
 - Interactive installer with local configuration storage
 - Full-screen terminal UI with command menu, transcript view, and history
 - Compatible with Anthropic-style API endpoints
+- A lightweight way to study Claude Code-like workflows and architecture
 
 ## Installation
 
@@ -115,6 +118,11 @@ Configuration priority:
 - `src/tui/*`: terminal UI modules
 - `src/config.ts`: runtime configuration loading
 - `src/install.ts`: interactive installer
+
+## Architecture
+
+- [Architecture Overview](./ARCHITECTURE.md)
+- [架构说明](./ARCHITECTURE_ZH.md)
 
 ## Development
 

@@ -1,11 +1,13 @@
-# mini-code 架构说明
+# MiniCode 架构说明
 
-这个文档描述 `mini-code` 的轻量化设计决策。
+[English](./ARCHITECTURE.md)
+
+这个文档描述 `mini-code` 的轻量化架构设计决策。
 目标不是把终端 agent 做成“大而全”的平台，而是优先保留最有价值的执行闭环、交互体验和安全边界。
 
 ## 设计原则
 
-当前 `mini-code` 优先保留这些能力：
+MiniCode 优先保留这些能力：
 
 1. `模型 -> 工具 -> 模型` 的主循环
 2. 全屏 TUI 的交互节奏
@@ -13,7 +15,7 @@
 4. transcript / tool / input 的组件化界面结构
 5. 用户可 review 的文件修改流程
 
-也就是说，`mini-code` 是一个更小、更可控的终端编码助手。
+也就是说，MiniCode 是一个更小、更可控的终端编码助手。
 
 ## 先保留什么
 
@@ -61,7 +63,7 @@
 
 如果这条链路稳定了，其它能力都可以挂上去。
 
-## mini-code 当前实现
+## MiniCode 当前实现
 
 - `src/index.ts`: CLI 入口
 - `src/agent-loop.ts`: 有最大步数限制的多轮工具调用循环
@@ -73,6 +75,18 @@
 - `src/permissions.ts`: 路径、命令、编辑审批与 allowlist / denylist
 - `src/file-review.ts`: 写文件前 diff review
 - `src/tui/*`: transcript / chrome / input / screen / markdown 终端组件
+
+## 为什么适合学习
+
+MiniCode 的一个优势，是用更轻量的实现方式，提供了类 Claude Code 的功能体验和核心架构思路。
+
+这让它很适合用来：
+
+- 学习 terminal coding agent 的基本组成
+- 研究 tool-calling loop
+- 理解权限审批和文件 review 流程
+- 试验终端 UI 的组织方式
+- 在小代码量基础上继续做自己的定制开发
 
 ## 第二阶段建议
 
