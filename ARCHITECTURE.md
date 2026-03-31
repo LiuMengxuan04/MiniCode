@@ -3,97 +3,69 @@
 [简体中文](./ARCHITECTURE_ZH.md)
 
 This document describes the lightweight architecture decisions behind `mini-code`.
-
-The goal is not to build a giant all-in-one terminal agent platform. The goal is to keep the execution loop, interaction model, and safety boundaries small, understandable, and practical.
+The goal is not to build a giant all-in-one terminal agent platform, but to prioritize the most valuable execution loop, interaction experience, and safety boundaries.
 
 ## Design Principles
 
 MiniCode prioritizes these capabilities:
 
-1. a clear `model -> tool -> model` execution loop
-2. a focused full-screen terminal workflow
-3. directory awareness, permission checks, and dangerous action confirmation
+1. the main `model -> tool -> model` loop
+2. full-screen TUI interaction rhythm
+3. directory awareness, permission checks, and dangerous-action confirmation
 4. a componentized transcript / tool / input UI structure
-5. reviewable file modifications before write
+5. a user-reviewable file modification flow
 
-MiniCode is designed as a smaller, more hackable terminal coding assistant.
+In other words, MiniCode is a smaller, more controllable terminal coding assistant.
 
-## What We Keep First
+## Current implementation focus
 
-The first version keeps only the four most important layers:
+- Keep the skeleton of the `model -> tool -> model` loop
+- Keep a unified tool contract and centralized registration
+- Keep a message-driven terminal interaction rhythm
+- Keep safety boundaries: path permissions, command permissions, and write approval
 
-1. CLI entry
-2. agent loop
-3. tool registry
-4. tool implementations
+## Planned / not yet built
 
-Key implementation priorities:
+- Full Ink/React rendering stack
+- Bridge / IDE two-way communication
+- Remote session
+- Task swarm / sub-agent orchestration
+- LSP
+- Skill marketplace
+- More complex permission modes
+- Feature-flag system
+- Telemetry / analytics
+- Compact / memory / session restore
 
-- keep the `model -> tool -> model` loop simple and explicit
-- keep a unified tool contract and centralized registration
-- keep a message-driven terminal interaction model
-- keep path permissions, command permissions, and edit review boundaries
-
-## What We Deliberately Leave Out
-
-These are useful, but not necessary for the shortest working loop:
-
-- a full Ink/React rendering stack
-- IDE bridge integrations
-- remote sessions
-- multi-agent orchestration
-- LSP integrations
-- plugin marketplaces
-- large feature-flag systems
-- telemetry and analytics
-- session compaction, memory syncing, and restore systems
-
-The point is not that these ideas are bad. The point is that they are not required for a small, stable coding assistant.
-
-## Why the Main Loop Matters
-
-The most important part of a terminal coding assistant is not feature count. It is whether the main loop is clear:
-
-1. accept user input
-2. send it to the model
-3. let the model choose whether to use tools
-4. execute tools
-5. feed tool results back
-6. produce the final response
-
-Once that loop is stable, additional capabilities can be layered on top.
-
-## Current Project Structure
+## Current implementation
 
 - `src/index.ts`: CLI entry
-- `src/agent-loop.ts`: multi-step model/tool loop with step limits
-- `src/tool.ts`: tool registration, validation, and execution
-- `src/tools/*`: built-in tools such as file read, search, edit, patch, and command execution
-- `src/config.ts`: runtime configuration loading from `~/.mini-code`
+- `src/agent-loop.ts`: multi-turn tool-calling loop with a maximum step limit
+- `src/tool.ts`: registration, validation, execution
+- `src/tools/*`: `list_files` / `grep_files` / `read_file` / `write_file` / `edit_file` / `patch_file` / `modify_file` / `run_command`
+- `src/config.ts`: uses dedicated `~/.mini-code`
 - `src/anthropic-adapter.ts`: Anthropic-compatible Messages API adapter
-- `src/mock-model.ts`: offline fallback model
-- `src/permissions.ts`: path, command, and edit approval rules
-- `src/file-review.ts`: diff-based review flow before writes
-- `src/tui/*`: transcript, chrome, input, screen, and markdown rendering modules
+- `src/mock-model.ts`: offline fallback adapter
+- `src/permissions.ts`: path, command, and edit approval with allowlist / denylist
+- `src/file-review.ts`: diff review before writing files
+- `src/tui/*`: transcript / chrome / input / screen / markdown terminal components
 
-## Why It Is Useful for Learning
+## Why it is good for learning
 
-One of MiniCode's strengths is that it delivers Claude Code-like capabilities and architectural patterns in a much lighter implementation.
+One strength of MiniCode is that it delivers Claude Code–like behavior and core architectural ideas in a much lighter implementation.
 
-That makes it useful for:
+That makes it well suited to:
 
-- learning how terminal coding agents work
-- studying tool-calling loops
-- understanding approval and file review flows
-- experimenting with terminal UI architecture
-- building custom coding assistants on top of a small codebase
+- Learning the basic pieces of a terminal coding agent
+- Studying tool-calling loops
+- Understanding permission approval and file review flows
+- Experimenting with how terminal UIs are organized
+- Customizing further on top of a small codebase
 
-## Next Steps
+## Future improvements
 
-Good next iterations include:
-
-1. a more complete virtualized transcript viewport
-2. richer prompt editing behavior
-3. a more expressive tool status panel
-4. project memory and session persistence
-5. stronger UI modularity
+1. A more complete virtual-scrolling transcript
+2. Richer input editing behavior
+3. A finer-grained tool execution status panel
+4. Session history and project memory
+5. Stronger UI componentization
