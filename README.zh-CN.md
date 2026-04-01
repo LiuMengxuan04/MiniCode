@@ -53,6 +53,7 @@ MiniCode 围绕一个实用的 terminal-first agent loop 构建：
 - 支持通过 `SKILL.md` 发现本地 skills
 - 支持通过 stdio 动态加载 MCP tools
 - 支持通过通用 MCP helper tools 访问 resources 和 prompts
+- 会在长会话中自动压缩较早上下文，保留最近消息并总结旧历史
 
 ### 内置工具
 

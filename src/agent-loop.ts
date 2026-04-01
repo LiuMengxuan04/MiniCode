@@ -1,6 +1,7 @@
 import type { ToolRegistry } from './tool.js'
 import type { ChatMessage, ModelAdapter } from './types.js'
 import type { PermissionManager } from './permissions.js'
+import { maybeAutoCompactConversation } from './compact.js'
 
 function looksLikeClarifyingQuestion(content: string): boolean {
   const trimmed = content.trim()
@@ -148,7 +149,15 @@ export async function runAgentTurn(args: {
     ]
   }
 
+<<<<<<< HEAD
   for (let step = 0; maxSteps == null || step < maxSteps; step++) {
+    messages = await maybeAutoCompactConversation({
+      model: args.model,
+      messages,
+      onCompact() {
+        args.onProgressMessage?.('自动压缩较早的上下文，以继续当前会话...')
+      },
+    })
     const next = await args.model.next(messages)
 
     if (next.type === 'assistant') {

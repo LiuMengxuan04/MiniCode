@@ -70,10 +70,18 @@ function toTextBlock(text: string): AnthropicContentBlock {
 }
 
 function toAssistantText(message: Extract<ChatMessage, {
-  role: 'assistant' | 'assistant_progress'
+  role: 'assistant' | 'assistant_progress' | 'context_summary'
 }>): string {
   if (message.role === 'assistant_progress') {
     return `<progress>\n${message.content}\n</progress>`
+  }
+
+  if (message.role === 'context_summary') {
+    return [
+      '<context_summary>',
+      message.content,
+      '</context_summary>',
+    ].join('\n')
   }
 
   return message.content
@@ -112,7 +120,11 @@ function toAnthropicMessages(messages: ChatMessage[]): {
       continue
     }
 
-    if (message.role === 'assistant' || message.role === 'assistant_progress') {
+    if (
+      message.role === 'assistant' ||
+      message.role === 'assistant_progress' ||
+      message.role === 'context_summary'
+    ) {
       pushAnthropicMessage(
         converted,
         'assistant',
@@ -148,9 +160,15 @@ export class AnthropicModelAdapter implements ModelAdapter {
     private readonly getRuntimeConfig: () => Promise<RuntimeConfig>,
   ) {}
 
-  async next(messages: ChatMessage[]) {
-    const runtime = await this.getRuntimeConfig()
-    const payload = toAnthropicMessages(messages)
+  private async request(
+    runtime: RuntimeConfig,
+    payload: {
+      system: string
+      messages: AnthropicMessage[]
+      tools?: Array<Record<string, unknown>>
+      maxTokens?: number
+    },
+  ) {
     const url = `${runtime.baseUrl.replace(/\/$/, '')}/v1/messages`
 
     const headers: Record<string, string> = {
@@ -168,14 +186,12 @@ export class AnthropicModelAdapter implements ModelAdapter {
       model: runtime.model,
       system: payload.system,
       messages: payload.messages,
-      tools: this.tools.list().map(tool => ({
-        name: tool.name,
-        description: tool.description,
-        input_schema: tool.inputSchema,
-      })),
-      ...(runtime.maxOutputTokens !== undefined
-        ? { max_tokens: runtime.maxOutputTokens }
-        : {}),
+      ...(payload.tools ? { tools: payload.tools } : {}),
+      ...(payload.maxTokens !== undefined
+        ? { max_tokens: payload.maxTokens }
+        : runtime.maxOutputTokens !== undefined
+          ? { max_tokens: runtime.maxOutputTokens }
+          : {}),
     }
 
     const response = await fetch(url, {
@@ -193,6 +209,22 @@ export class AnthropicModelAdapter implements ModelAdapter {
     if (!response.ok) {
       throw new Error(data.error?.message || `Model request failed: ${response.status}`)
     }
+
+    return data
+  }
+
+  async next(messages: ChatMessage[]) {
+    const runtime = await this.getRuntimeConfig()
+    const payload = toAnthropicMessages(messages)
+    const data = await this.request(runtime, {
+      system: payload.system,
+      messages: payload.messages,
+      tools: this.tools.list().map(tool => ({
+        name: tool.name,
+        description: tool.description,
+        input_schema: tool.inputSchema,
+      })),
+    })
 
     const toolCalls: ToolCall[] = []
     const textParts: string[] = []
@@ -245,5 +277,59 @@ export class AnthropicModelAdapter implements ModelAdapter {
       kind: parsedText.kind,
       diagnostics,
     }
+  }
+
+  async summarizeConversation(messages: ChatMessage[]): Promise<string> {
+    const runtime = await this.getRuntimeConfig()
+    const transcript = messages
+      .map(message => {
+        switch (message.role) {
+          case 'user':
+            return `[user]\n${message.content}`
+          case 'assistant':
+            return `[assistant]\n${message.content}`
+          case 'assistant_progress':
+            return `[assistant progress]\n${message.content}`
+          case 'context_summary':
+            return `[earlier summary]\n${message.content}`
+          case 'assistant_tool_call':
+            return `[tool call:${message.toolName}]\n${JSON.stringify(message.input)}`
+          case 'tool_result':
+            return `[tool result:${message.toolName}${message.isError ? ' error' : ''}]\n${message.content}`
+          case 'system':
+            return null
+        }
+      })
+      .filter((value): value is string => Boolean(value))
+      .join('\n\n')
+
+    const data = await this.request(runtime, {
+      system: [
+        'You are summarizing earlier conversation context for a coding agent.',
+        'Produce a compact factual summary that preserves only information needed to continue the task.',
+        'Include: user goals, decisions made, relevant files or paths, important tool results, active skills or MCP usage, and any unresolved next steps.',
+        'Do not restate long file contents. Do not add new instructions. Keep it concise and structured.',
+      ].join('\n'),
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: transcript,
+            },
+          ],
+        },
+      ],
+      maxTokens: 2048,
+    })
+
+    const text = (data.content ?? [])
+      .filter(isTextBlock)
+      .map(block => block.text)
+      .join('\n')
+      .trim()
+
+    return text
   }
 }

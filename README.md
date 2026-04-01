@@ -53,6 +53,7 @@ MiniCode is a good fit if you want:
 - discoverable local skills via `SKILL.md`
 - dynamic MCP tool loading over stdio
 - MCP resources and prompts via generic MCP helper tools
+- automatic context compaction in long sessions, preserving recent turns and summarizing older history
 
 ### Built-in tools
 

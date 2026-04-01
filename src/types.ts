@@ -3,6 +3,7 @@ export type ChatMessage =
   | { role: 'user'; content: string }
   | { role: 'assistant'; content: string }
   | { role: 'assistant_progress'; content: string }
+  | { role: 'context_summary'; content: string }
   | {
       role: 'assistant_tool_call'
       toolUseId: string
@@ -46,4 +47,5 @@ export type AgentStep =
 
 export interface ModelAdapter {
   next(messages: ChatMessage[]): Promise<AgentStep>
+  summarizeConversation?(messages: ChatMessage[]): Promise<string>
 }
