@@ -149,7 +149,6 @@ export async function runAgentTurn(args: {
     ]
   }
 
-<<<<<<< HEAD
   for (let step = 0; maxSteps == null || step < maxSteps; step++) {
     messages = await maybeAutoCompactConversation({
       model: args.model,
