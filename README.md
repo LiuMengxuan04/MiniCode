@@ -360,14 +360,13 @@ That means servers such as MiniMax MCP, which use newline-delimited JSON over st
 
 ## Star History
 
-<p align="center">
-  <a href="https://star-history.com/#LiuMengxuan04/MiniCode&Date">
-    <img
-      alt="Star History Chart"
-      src="https://api.star-history.com/image?repos=LiuMengxuan04/MiniCode&style=landscape1"
-    />
-  </a>
-</p>
+<a href="https://www.star-history.com/?repos=LiuMengxuan04%2FMiniCode&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/image?repos=LiuMengxuan04/MiniCode&type=date&theme=dark&legend=bottom-right" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/image?repos=LiuMengxuan04/MiniCode&type=date&legend=bottom-right" />
+   <img alt="Star History Chart" src="https://api.star-history.com/image?repos=LiuMengxuan04/MiniCode&type=date&legend=bottom-right" />
+ </picture>
+</a>
 
 ## Learn Claude Code Design Through MiniCode
 
