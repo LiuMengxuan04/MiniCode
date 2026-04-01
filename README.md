@@ -361,8 +361,11 @@ That means servers such as MiniMax MCP, which use newline-delimited JSON over st
 ## Star History
 
 <p align="center">
-  <a href="https://starchart.cc/LiuMengxuan04/MiniCode">
-    <img src="https://starchart.cc/LiuMengxuan04/MiniCode.svg" alt="Stargazers over time" />
+  <a href="https://star-history.com/#LiuMengxuan04/MiniCode&Date">
+    <img
+      alt="Star History Chart"
+      src="https://api.star-history.com/image?repos=LiuMengxuan04/MiniCode&style=landscape1"
+    />
   </a>
 </p>
 
