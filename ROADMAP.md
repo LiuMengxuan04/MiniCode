@@ -45,9 +45,28 @@ This includes:
 
 This is important for real-world usage and longer task execution.
 
+### 4. Multi-language implementation branches
+
+Another important direction is to explore parallel implementations of MiniCode in other languages, especially:
+
+- Python
+- Go
+- Rust
+
+This is particularly valuable for the learning side of the project.
+
+The goal is not to fragment the main codebase immediately. The goal is to encourage language-specific branches or companion implementations that preserve the same core ideas:
+
+- lightweight architecture
+- Claude Code-aligned design direction
+- readable agent loop and tool model
+- educational value for contributors studying different ecosystems
+
+If you are interested in building or maintaining a Python, Go, or Rust variant, contributions and direct collaboration are welcome.
+
 ## P1
 
-### 4. Layered memory loading
+### 5. Layered memory loading
 
 MiniCode should support a lightweight memory hierarchy similar in spirit to Claude Code's layered project context.
 
@@ -58,7 +77,7 @@ This may include:
 - nested/project-local memory
 - simple include support where appropriate
 
-### 5. Stronger provider abstraction
+### 6. Stronger provider abstraction
 
 MiniCode currently works well with Anthropic-style APIs and some compatible providers, but the provider model can be made more explicit and complete.
 
@@ -69,19 +88,19 @@ Target direction:
 - OpenRouter
 - LiteLLM-style gateways
 
-### 6. Todo or task tracking support
+### 7. Todo or task tracking support
 
 A lightweight built-in task tracker would improve long multi-step execution.
 
 This should stay simple and should not become a heavyweight planning subsystem.
 
-### 7. `.claude/agents` and sub-agent support
+### 8. `.claude/agents` and sub-agent support
 
 This is an important capability, but it also adds complexity.
 
 It is worth doing after the core runtime is more stable.
 
-### 8. Expand the core toolset selectively
+### 9. Expand the core toolset selectively
 
 MiniCode does not need to chase Claude Code's full tool count mechanically, but it does need to expand beyond the current minimal set over time.
 

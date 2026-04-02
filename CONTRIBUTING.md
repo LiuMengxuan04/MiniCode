@@ -111,6 +111,21 @@ Before opening a PR, please make sure:
 
 If something is intentionally incomplete or unverified, mention it explicitly in the PR description.
 
+### 10. Check issues before starting a feature
+
+For new features, please check the repository issues first.
+
+This helps avoid duplicated work and keeps implementation aligned with the current roadmap.
+
+The preferred flow is:
+
+- check whether an issue already exists
+- check whether someone has already claimed the work
+- for medium or large features, open an issue first if none exists
+- link the PR to the relevant issue whenever possible
+
+Small fixes and minor documentation changes can still go directly to PR when appropriate.
+
 ## What Fits Well
 
 Contributions are especially welcome in areas such as:
@@ -139,6 +154,7 @@ A good PR description should briefly explain:
 
 - what changed
 - why it is needed
+- which issue it is related to, if applicable
 - how it stays lightweight
 - how it aligns with Claude Code's design direction
 - how it was verified

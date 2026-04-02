@@ -45,9 +45,28 @@ MiniCode 应该支持更可靠的 session save / resume。
 
 这对真实使用和长任务执行都很重要。
 
+### 4. 多语言实现分支
+
+另一个重要方向，是探索 MiniCode 的多语言实现版本，尤其包括：
+
+- Python
+- Go
+- Rust
+
+这对项目的“学习价值”很重要。
+
+目标并不是立刻把主代码库拆散，而是鼓励围绕同一套核心思路，逐步发展语言对应的分支或伴生实现：
+
+- 保持轻量架构
+- 与 Claude Code 的设计方向保持趋同
+- 保持 agent loop 和 tool model 的可读性
+- 让不同语言生态中的学习者也能从中受益
+
+如果你对维护或实现 Python、Go、Rust 版本感兴趣，也非常欢迎直接联系并参与贡献。
+
 ## P1
 
-### 4. 分层 memory 加载
+### 5. 分层 memory 加载
 
 MiniCode 应该支持一种轻量的分层 memory 体系，方向上接近 Claude Code 的 layered project context。
 
@@ -58,7 +77,7 @@ MiniCode 应该支持一种轻量的分层 memory 体系，方向上接近 Claud
 - 嵌套目录 / 本地 memory
 - 在合适范围内支持简单 include
 
-### 5. 更完整的 provider abstraction
+### 6. 更完整的 provider abstraction
 
 MiniCode 当前已经能接 Anthropic 风格接口和部分兼容供应商，但 provider 模型还可以更明确、更完整。
 
@@ -69,19 +88,19 @@ MiniCode 当前已经能接 Anthropic 风格接口和部分兼容供应商，但
 - OpenRouter
 - LiteLLM-style gateways
 
-### 6. Todo / task tracking
+### 7. Todo / task tracking
 
 一个轻量内置任务跟踪工具会明显提升多步执行体验。
 
 但它应该保持轻量，不要演变成很重的 planning subsystem。
 
-### 7. `.claude/agents` 与 sub-agent 支持
+### 8. `.claude/agents` 与 sub-agent 支持
 
 这是一个重要能力，但复杂度也会明显上升。
 
 更适合在核心 runtime 更稳定之后推进。
 
-### 8. 有选择地扩充核心工具集
+### 9. 有选择地扩充核心工具集
 
 MiniCode 不需要机械追求和 Claude Code 一样的工具数量，但随着项目演进，当前这套最小工具集确实需要继续扩充。
 
