@@ -1,6 +1,6 @@
 # MiniCode
 
-[简体中文](./README.zh-CN.md) | [Architecture](./ARCHITECTURE.md) | [Contributing](./CONTRIBUTING.md) | [Learn Claude Code Design Through MiniCode](./CLAUDE_CODE_PATTERNS.md) | [License](./LICENSE)
+[简体中文](./README.zh-CN.md) | [Architecture](./ARCHITECTURE.md) | [Contributing](./CONTRIBUTING.md) | [Roadmap](./ROADMAP.md) | [Learn Claude Code Design Through MiniCode](./CLAUDE_CODE_PATTERNS.md) | [License](./LICENSE)
 
 A lightweight terminal coding assistant for local development workflows.
 
@@ -31,6 +31,7 @@ The project is intentionally compact, so the control flow, tool model, and TUI b
 - [Project Structure](#project-structure)
 - [Architecture Docs](#architecture-docs)
 - [Contributing](#contributing)
+- [Roadmap](#roadmap)
 - [Learn Claude Code Design Through MiniCode](#learn-claude-code-design-through-minicode)
 - [Development](#development)
 
@@ -397,6 +398,11 @@ If you want to study the project as a learning resource, continue with:
 
 - [Contribution Guidelines](./CONTRIBUTING.md)
 - [中文贡献规范](./CONTRIBUTING_ZH.md)
+
+## Roadmap
+
+- [Roadmap](./ROADMAP.md)
+- [路线图（中文）](./ROADMAP_ZH.md)
 
 ## Development
 
