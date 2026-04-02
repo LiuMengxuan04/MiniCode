@@ -20,6 +20,12 @@ const BRIGHT_CYAN = '\u001b[96m'
 const BRIGHT_YELLOW = '\u001b[93m'
 const BORDER = '\u001b[38;5;31m'
 
+type ContextUsage = {
+  usedTokens: number
+  maxTokens: number
+  usedPercent: number
+}
+
 function stripAnsi(input: string): string {
   return input.replace(/\u001b\[[0-9;]*m/g, '')
 }
@@ -111,6 +117,16 @@ function colorBadge(
   color: string,
 ): string {
   return `${color}[${label}]${RESET} ${BOLD}${value}${RESET}`
+}
+
+function formatTokenCount(value: number): string {
+  if (value >= 1_000_000) {
+    return `${(value / 1_000_000).toFixed(1)}M`
+  }
+  if (value >= 1_000) {
+    return `${(value / 1_000).toFixed(1)}k`
+  }
+  return String(value)
 }
 
 function borderLine(kind: 'top' | 'bottom', width: number): string {
@@ -274,10 +290,20 @@ export function renderFooterBar(
   status: string | null,
   toolsEnabled: boolean,
   skillsEnabled: boolean,
+  contextUsage?: ContextUsage,
 ): string {
   const width = Math.max(60, process.stdout.columns ?? 100)
   const left = renderStatusLine(status)
-  const right = `${DIM}tools${RESET} ${toolsEnabled ? `${GREEN}on${RESET}` : `${RED}off${RESET}`} ${DIM}|${RESET} ${DIM}skills${RESET} ${skillsEnabled ? `${GREEN}on${RESET}` : `${RED}off${RESET}`}`
+  const usageColor =
+    (contextUsage?.usedPercent ?? 0) >= 90
+      ? BRIGHT_RED
+      : (contextUsage?.usedPercent ?? 0) >= 75
+        ? BRIGHT_YELLOW
+        : BRIGHT_GREEN
+  const contextPart = contextUsage
+    ? `${DIM}ctx${RESET} ${usageColor}${formatTokenCount(contextUsage.usedTokens)}/${formatTokenCount(contextUsage.maxTokens)} ${contextUsage.usedPercent.toFixed(1)}%${RESET}`
+    : `${DIM}ctx${RESET} ${DIM}n/a${RESET}`
+  const right = `${DIM}tools${RESET} ${toolsEnabled ? `${GREEN}on${RESET}` : `${RED}off${RESET}`} ${DIM}|${RESET} ${DIM}skills${RESET} ${skillsEnabled ? `${GREEN}on${RESET}` : `${RED}off${RESET}`} ${DIM}|${RESET} ${contextPart}`
   const gap = Math.max(1, width - stripAnsi(left).length - stripAnsi(right).length)
   return `${left}${' '.repeat(gap)}${right}`
 }

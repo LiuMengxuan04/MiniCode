@@ -46,6 +46,12 @@ type TtyAppArgs = {
   permissions: PermissionManager
 }
 
+type ContextUsage = {
+  usedTokens: number
+  maxTokens: number
+  usedPercent: number
+}
+
 type PendingApproval = {
   request: PermissionRequest
   resolve: (result: PermissionPromptResult) => void
@@ -84,6 +90,53 @@ function getSessionStats(args: TtyAppArgs, state: ScreenState) {
     messageCount: args.messages.length,
     skillCount: args.tools.getSkills().length,
     mcpCount: args.tools.getMcpServers().length,
+  }
+}
+
+function estimateTextTokens(value: string): number {
+  const trimmed = value.trim()
+  if (!trimmed) return 0
+  // Keep estimation simple and stable: roughly 1 token per 4 chars.
+  return Math.max(1, Math.ceil(trimmed.length / 4))
+}
+
+function estimateContextUsage(messages: ChatMessage[]): ContextUsage {
+  const envOverride = Number(process.env.MINI_CODE_MAX_CONTEXT_TOKENS)
+  const maxTokens =
+    Number.isFinite(envOverride) && envOverride > 0
+      ? Math.floor(envOverride)
+      : 200_000
+
+  let usedTokens = 0
+  for (const message of messages) {
+    if (
+      message.role === 'system' ||
+      message.role === 'user' ||
+      message.role === 'assistant' ||
+      message.role === 'assistant_progress'
+    ) {
+      usedTokens += estimateTextTokens(message.content)
+      continue
+    }
+
+    if (message.role === 'assistant_tool_call') {
+      usedTokens += estimateTextTokens(message.toolName)
+      try {
+        usedTokens += estimateTextTokens(JSON.stringify(message.input))
+      } catch {
+        usedTokens += estimateTextTokens(String(message.input))
+      }
+      continue
+    }
+
+    usedTokens += estimateTextTokens(message.toolName)
+    usedTokens += estimateTextTokens(message.content)
+  }
+
+  return {
+    usedTokens,
+    maxTokens,
+    usedPercent: Number(((usedTokens / maxTokens) * 100).toFixed(1)),
   }
 }
 
@@ -427,6 +480,7 @@ function extractPathFromToolInput(input: unknown): string | null {
 }
 
 function renderScreen(args: TtyAppArgs, state: ScreenState): void {
+  const contextUsage = estimateContextUsage(args.messages)
   clearScreen()
   console.log(renderHeaderPanel(args, state))
   console.log('')
@@ -452,6 +506,7 @@ function renderScreen(args: TtyAppArgs, state: ScreenState): void {
         state.status,
         true,
         args.tools.getSkills().length > 0,
+        contextUsage,
       ),
     )
     return
@@ -482,6 +537,7 @@ function renderScreen(args: TtyAppArgs, state: ScreenState): void {
       state.status,
       true,
       args.tools.getSkills().length > 0,
+      contextUsage,
     ),
   )
 }
