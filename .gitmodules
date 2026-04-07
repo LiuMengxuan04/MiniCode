@@ -1,3 +1,6 @@
 [submodule "external/MiniCode-rs"]
 	path = external/MiniCode-rs
 	url = https://github.com/harkerhand/MiniCode-rs.git
+[submodule "external/MiniCode-Python"]
+	path = external/MiniCode-Python
+	url = https://github.com/QUSETIONS/MiniCode-Python.git
