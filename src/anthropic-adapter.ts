@@ -1,6 +1,7 @@
 import type { ToolRegistry } from './tool.js'
 import type { ChatMessage, ModelAdapter, StepDiagnostics, ToolCall } from './types.js'
 import type { RuntimeConfig } from './config.js'
+import { resolveMaxOutputTokens } from './utils/context.js'
 
 const DEFAULT_MAX_RETRIES = 4
 const BASE_RETRY_DELAY_MS = 500
@@ -74,6 +75,10 @@ async function readJsonBody(response: Response): Promise<unknown> {
 }
 
 function extractErrorMessage(data: unknown, status: number): string {
+  if (typeof data === 'string' && data.trim()) {
+    return data.trim()
+  }
+
   if (
     typeof data === 'object' &&
     data !== null &&
@@ -81,10 +86,32 @@ function extractErrorMessage(data: unknown, status: number): string {
     typeof data.error === 'object' &&
     data.error !== null &&
     'message' in data.error &&
-    typeof data.error.message === 'string'
+    typeof data.error.message === 'string' &&
+    data.error.message.trim()
   ) {
-    return data.error.message
+    return data.error.message.trim()
   }
+
+  if (
+    typeof data === 'object' &&
+    data !== null &&
+    'error' in data &&
+    typeof data.error === 'string' &&
+    data.error.trim()
+  ) {
+    return data.error.trim()
+  }
+
+  if (
+    typeof data === 'object' &&
+    data !== null &&
+    'message' in data &&
+    typeof data.message === 'string' &&
+    data.message.trim()
+  ) {
+    return data.message.trim()
+  }
+
   return `Model request failed: ${status}`
 }
 
@@ -138,6 +165,141 @@ function parseAssistantText(content: string): {
   }
 
   return { content: trimmed }
+}
+
+const TEXT_TOOL_USE_HEADER = /^\s*\[tool_use\s+id=([^\s\]]+)\s+name=([^\s\]]+)\]\s*$/gm
+
+function extractLeadingJsonValue(segment: string): {
+  value: unknown
+  end: number
+} | null {
+  const start = segment.search(/\S/)
+  if (start === -1) {
+    return { value: {}, end: segment.length }
+  }
+
+  const first = segment[start]
+  if (first !== '{' && first !== '[') {
+    return null
+  }
+
+  const stack: string[] = []
+  let inString = false
+  let escaped = false
+  for (let index = start; index < segment.length; index += 1) {
+    const char = segment[index]
+
+    if (inString) {
+      if (escaped) {
+        escaped = false
+        continue
+      }
+      if (char === '\\') {
+        escaped = true
+        continue
+      }
+      if (char === '"') {
+        inString = false
+      }
+      continue
+    }
+
+    if (char === '"') {
+      inString = true
+      continue
+    }
+
+    if (char === '{') {
+      stack.push('}')
+      continue
+    }
+
+    if (char === '[') {
+      stack.push(']')
+      continue
+    }
+
+    if (char === '}' || char === ']') {
+      if (stack.at(-1) !== char) {
+        return null
+      }
+      stack.pop()
+      if (stack.length === 0) {
+        const end = index + 1
+        try {
+          return {
+            value: JSON.parse(segment.slice(start, end)),
+            end,
+          }
+        } catch {
+          return null
+        }
+      }
+    }
+  }
+
+  return null
+}
+
+function cleanupToolProtocolText(content: string): string {
+  const normalized = content.replace(/\r\n/g, '\n')
+  const lines = normalized.split('\n')
+
+  while (lines[0]?.trim() === '') {
+    lines.shift()
+  }
+
+  if (lines[0]?.trim().toLowerCase() === 'assistant') {
+    lines.shift()
+  }
+
+  const filtered = lines.filter(line => !/^\[DUMMY_TOOL_RESULT\]$/i.test(line.trim()))
+  return filtered.join('\n').replace(/\n{3,}/g, '\n\n').trim()
+}
+
+function extractToolCallsFromText(content: string): {
+  content: string
+  calls: ToolCall[]
+} {
+  const matches = [...content.matchAll(TEXT_TOOL_USE_HEADER)]
+  if (matches.length === 0) {
+    return { content, calls: [] }
+  }
+
+  const calls: ToolCall[] = []
+  const contentPieces: string[] = []
+  let cursor = 0
+
+  for (let index = 0; index < matches.length; index += 1) {
+    const match = matches[index]
+    const headerStart = match.index ?? 0
+    const headerText = match[0]
+    const nextHeaderStart = matches[index + 1]?.index ?? content.length
+
+    contentPieces.push(content.slice(cursor, headerStart))
+
+    const segmentStart = headerStart + headerText.length
+    const segment = content.slice(segmentStart, nextHeaderStart)
+    const parsedInput = extractLeadingJsonValue(segment)
+    if (!parsedInput) {
+      return { content, calls: [] }
+    }
+
+    calls.push({
+      id: match[1] ?? `text-tool-call-${index}`,
+      toolName: match[2] ?? '',
+      input: parsedInput.value,
+    })
+    contentPieces.push(segment.slice(parsedInput.end))
+    cursor = nextHeaderStart
+  }
+
+  contentPieces.push(content.slice(cursor))
+
+  return {
+    content: cleanupToolProtocolText(contentPieces.join('')),
+    calls,
+  }
 }
 
 function toTextBlock(text: string): AnthropicContentBlock {
@@ -227,6 +389,10 @@ export class AnthropicModelAdapter implements ModelAdapter {
     const runtime = await this.getRuntimeConfig()
     const payload = toAnthropicMessages(messages)
     const url = `${runtime.baseUrl.replace(/\/$/, '')}/v1/messages`
+    const maxOutputTokens = resolveMaxOutputTokens(
+      runtime.model,
+      runtime.maxOutputTokens,
+    )
 
     const headers: Record<string, string> = {
       'content-type': 'application/json',
@@ -248,9 +414,7 @@ export class AnthropicModelAdapter implements ModelAdapter {
         description: tool.description,
         input_schema: tool.inputSchema,
       })),
-      ...(runtime.maxOutputTokens !== undefined
-        ? { max_tokens: runtime.maxOutputTokens }
-        : {}),
+      max_tokens: maxOutputTokens,
     }
 
     const maxRetries = getRetryLimit()
@@ -310,7 +474,9 @@ export class AnthropicModelAdapter implements ModelAdapter {
       ignoredBlockTypes.add(block.type)
     }
 
-    const parsedText = parseAssistantText(textParts.join('\n').trim())
+    const textWithFallbackCalls = extractToolCallsFromText(textParts.join('\n').trim())
+    const parsedText = parseAssistantText(textWithFallbackCalls.content)
+    toolCalls.push(...textWithFallbackCalls.calls)
     const diagnostics: StepDiagnostics = {
       stopReason: data.stop_reason,
       blockTypes,
