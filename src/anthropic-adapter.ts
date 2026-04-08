@@ -1,6 +1,7 @@
 import type { ToolRegistry } from './tool.js'
 import type { ChatMessage, ModelAdapter, StepDiagnostics, ToolCall } from './types.js'
 import type { RuntimeConfig } from './config.js'
+import { resolveMaxOutputTokens } from './utils/context.js'
 
 const DEFAULT_MAX_RETRIES = 4
 const BASE_RETRY_DELAY_MS = 500
@@ -74,6 +75,10 @@ async function readJsonBody(response: Response): Promise<unknown> {
 }
 
 function extractErrorMessage(data: unknown, status: number): string {
+  if (typeof data === 'string' && data.trim()) {
+    return data.trim()
+  }
+
   if (
     typeof data === 'object' &&
     data !== null &&
@@ -81,10 +86,32 @@ function extractErrorMessage(data: unknown, status: number): string {
     typeof data.error === 'object' &&
     data.error !== null &&
     'message' in data.error &&
-    typeof data.error.message === 'string'
+    typeof data.error.message === 'string' &&
+    data.error.message.trim()
   ) {
-    return data.error.message
+    return data.error.message.trim()
   }
+
+  if (
+    typeof data === 'object' &&
+    data !== null &&
+    'error' in data &&
+    typeof data.error === 'string' &&
+    data.error.trim()
+  ) {
+    return data.error.trim()
+  }
+
+  if (
+    typeof data === 'object' &&
+    data !== null &&
+    'message' in data &&
+    typeof data.message === 'string' &&
+    data.message.trim()
+  ) {
+    return data.message.trim()
+  }
+
   return `Model request failed: ${status}`
 }
 
@@ -227,6 +254,10 @@ export class AnthropicModelAdapter implements ModelAdapter {
     const runtime = await this.getRuntimeConfig()
     const payload = toAnthropicMessages(messages)
     const url = `${runtime.baseUrl.replace(/\/$/, '')}/v1/messages`
+    const maxOutputTokens = resolveMaxOutputTokens(
+      runtime.model,
+      runtime.maxOutputTokens,
+    )
 
     const headers: Record<string, string> = {
       'content-type': 'application/json',
@@ -248,9 +279,7 @@ export class AnthropicModelAdapter implements ModelAdapter {
         description: tool.description,
         input_schema: tool.inputSchema,
       })),
-      ...(runtime.maxOutputTokens !== undefined
-        ? { max_tokens: runtime.maxOutputTokens }
-        : {}),
+      max_tokens: maxOutputTokens,
     }
 
     const maxRetries = getRetryLimit()
