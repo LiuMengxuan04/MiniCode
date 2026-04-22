@@ -25,7 +25,7 @@ function stripAnsi(input: string): string {
   return input.replace(/\u001b\[[0-9;]*m/g, '')
 }
 
-function charDisplayWidth(char: string): number {
+export function charDisplayWidth(char: string): number {
   const code = char.codePointAt(0)
   if (code === undefined) return 0
 
@@ -52,7 +52,7 @@ function charDisplayWidth(char: string): number {
   return 1
 }
 
-function stringDisplayWidth(input: string): number {
+export function stringDisplayWidth(input: string): number {
   return [...stripAnsi(input)].reduce((sum, char) => sum + charDisplayWidth(char), 0)
 }
 
@@ -173,7 +173,7 @@ function emptyPanelRow(width: number): string {
   return `${BORDER}│${RESET}${' '.repeat(Math.max(0, width - 2))}${BORDER}│${RESET}`
 }
 
-function wrapPanelBodyLine(line: string, width: number): string[] {
+export function wrapPanelBodyLine(line: string, width: number): string[] {
   const inner = Math.max(0, width - 4)
   if (inner <= 0) return ['']
   const plain = stripAnsi(line)
