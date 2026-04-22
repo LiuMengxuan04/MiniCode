@@ -15,6 +15,7 @@ import {
   PermissionRequest,
 } from './permissions.js'
 import { buildSystemPrompt } from './prompt.js'
+import { spawn } from 'node:child_process'
 import { parseInputChunk, type ParsedInputEvent } from './tui/input-parser.js'
 import {
   clearScreen,
@@ -33,7 +34,11 @@ import {
   renderTranscript,
   getTranscriptMaxScrollOffset,
   showCursor,
+  extractSelectedText,
+  renderTranscriptLines,
+  getTranscriptWindowSize,
   type TranscriptEntry,
+  type TranscriptSelection,
 } from './ui.js'
 import type { RuntimeConfig } from './config.js'
 import type { ToolRegistry } from './tool.js'
@@ -78,6 +83,8 @@ type ScreenState = {
   isBusy: boolean
   contextStats: ContextStats | null
   compressionStatus: string | null
+  selection: TranscriptSelection | null
+  mouseDown: { x: number; y: number } | null
 }
 
 type TranscriptEntryDraft =
@@ -146,6 +153,51 @@ function getMaxTranscriptScrollOffset(args: TtyAppArgs, state: ScreenState): num
     state.transcript,
     getTranscriptBodyLines(args, state),
   )
+}
+
+function getTranscriptBodyStartY(args: TtyAppArgs, state: ScreenState): number {
+  const headerLines = renderHeaderPanel(args, state).split('\n').length
+  // header + empty line + panel top border + panel title + panel empty row
+  return headerLines + 4
+}
+
+function screenToAbsoluteLineIndex(
+  args: TtyAppArgs,
+  state: ScreenState,
+  screenY: number,
+): number {
+  const bodyStartY = getTranscriptBodyStartY(args, state)
+  const bodyY = screenY - bodyStartY
+  if (bodyY < 0) return -1
+
+  const lines = renderTranscriptLines(state.transcript)
+  const pageSize = getTranscriptWindowSize(getTranscriptBodyLines(args, state))
+  const maxOffset = Math.max(0, lines.length - pageSize)
+  const offset = Math.max(0, Math.min(state.transcriptScrollOffset, maxOffset))
+  const end = lines.length - offset
+  const start = Math.max(0, end - pageSize)
+
+  const lineIndex = start + bodyY
+  if (lineIndex < 0 || lineIndex >= lines.length) return -1
+  return lineIndex
+}
+
+function copyToClipboard(text: string): void {
+  try {
+    const platform = process.platform
+    const proc =
+      platform === 'win32'
+        ? spawn('clip', { stdio: ['pipe', 'inherit', 'inherit'] })
+        : platform === 'darwin'
+          ? spawn('pbcopy', { stdio: ['pipe', 'inherit', 'inherit'] })
+          : spawn('xclip', ['-selection', 'clipboard'], {
+              stdio: ['pipe', 'inherit', 'inherit'],
+            })
+    proc.stdin?.write(text)
+    proc.stdin?.end()
+  } catch {
+    // Silently fail if clipboard is unavailable
+  }
 }
 
 function scrollTranscriptBy(
@@ -471,6 +523,7 @@ function renderScreen(args: TtyAppArgs, state: ScreenState): void {
             state.transcript,
             state.transcriptScrollOffset,
             getTranscriptBodyLines(args, state),
+            state.selection ?? undefined,
           )
         : `${renderStatusLine(null)}\n\nType /help for commands.`,
       {
@@ -939,6 +992,8 @@ export async function runTtyApp(args: TtyAppArgs): Promise<void> {
     isBusy: false,
     contextStats: null,
     compressionStatus: null,
+    selection: null,
+    mouseDown: null,
   }
   state.historyIndex = state.history.length
 
@@ -1165,6 +1220,64 @@ export async function runTtyApp(args: TtyAppArgs): Promise<void> {
           ) {
             renderScreen(permissionArgs, state)
           }
+          return
+        }
+
+        if (event.kind === 'mouse') {
+          const lineIndex = screenToAbsoluteLineIndex(permissionArgs, state, event.y)
+          if (lineIndex < 0) {
+            state.mouseDown = null
+            state.selection = null
+            return
+          }
+          const col = Math.max(0, event.x - 2)
+
+          if (event.action === 'press' && event.button === 'left') {
+            state.mouseDown = { x: col, y: lineIndex }
+            state.selection = null
+            renderScreen(permissionArgs, state)
+            return
+          }
+
+          if (event.action === 'drag' && event.button === 'left' && state.mouseDown) {
+            const startLine = Math.min(state.mouseDown.y, lineIndex)
+            const endLine = Math.max(state.mouseDown.y, lineIndex)
+            const startCol =
+              startLine === state.mouseDown.y
+                ? Math.min(state.mouseDown.x, col)
+                : state.mouseDown.y < lineIndex
+                  ? state.mouseDown.x
+                  : col
+            const endCol =
+              endLine === state.mouseDown.y
+                ? Math.max(state.mouseDown.x, col)
+                : state.mouseDown.y > lineIndex
+                  ? state.mouseDown.x
+                  : col
+
+            state.selection = {
+              startLine,
+              startCol,
+              endLine,
+              endCol,
+            }
+            renderScreen(permissionArgs, state)
+            return
+          }
+
+          if (event.action === 'release' && event.button === 'left' && state.mouseDown) {
+            if (state.selection) {
+              const text = extractSelectedText(state.transcript, state.selection)
+              if (text) {
+                copyToClipboard(text)
+              }
+            }
+            state.mouseDown = null
+            state.selection = null
+            renderScreen(permissionArgs, state)
+            return
+          }
+
           return
         }
 

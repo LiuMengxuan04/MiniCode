@@ -2,15 +2,76 @@ import process from 'node:process'
 import { renderMarkdownish } from './markdown.js'
 import type { TranscriptEntry } from './types.js'
 
-const RESET = '\u001b[0m'
-const DIM = '\u001b[2m'
-const CYAN = '\u001b[36m'
-const GREEN = '\u001b[32m'
-const YELLOW = '\u001b[33m'
-const RED = '\u001b[31m'
-const MAGENTA = '\u001b[35m'
-const BOLD = '\u001b[1m'
-const BLUE = '\u001b[34m'
+const RESET = '[0m'
+const DIM = '[2m'
+const CYAN = '[36m'
+const GREEN = '[32m'
+const YELLOW = '[33m'
+const RED = '[31m'
+const MAGENTA = '[35m'
+const BOLD = '[1m'
+const BLUE = '[34m'
+const REVERSE = '[7m'
+
+export type TranscriptSelection = {
+  startLine: number
+  startCol: number
+  endLine: number
+  endCol: number
+}
+
+function stripAnsi(str: string): string {
+  return str.replace(/\[[\d;]*[A-Za-z]/g, '')
+}
+
+function highlightRange(line: string, startCol: number, endCol: number): string {
+  if (startCol >= endCol) return line
+
+  let result = ''
+  let visibleIndex = 0
+  let i = 0
+  let highlighted = false
+
+  while (i < line.length) {
+    if (line[i] === '') {
+      const escapeStart = i
+      i++
+      if (i < line.length && line[i] === '[') {
+        i++
+        while (i < line.length && (line[i] < '@' || line[i] > '~')) {
+          i++
+        }
+        i++
+      }
+      const seq = line.slice(escapeStart, i)
+      result += seq
+      if (seq === '[0m' && highlighted) {
+        result += REVERSE
+      }
+      continue
+    }
+
+    if (!highlighted && visibleIndex === startCol) {
+      result += REVERSE
+      highlighted = true
+    }
+
+    if (highlighted && visibleIndex === endCol) {
+      result += RESET
+      highlighted = false
+    }
+
+    result += line[i]
+    visibleIndex++
+    i++
+  }
+
+  if (highlighted) {
+    result += RESET
+  }
+
+  return result
+}
 
 function indentBlock(input: string, prefix = '  '): string {
   return input
@@ -81,7 +142,7 @@ export function getTranscriptWindowSize(windowSize?: number): number {
   return Math.max(8, rows - 15)
 }
 
-function renderTranscriptLines(entries: TranscriptEntry[]): string[] {
+export function renderTranscriptLines(entries: TranscriptEntry[]): string[] {
   const rendered = entries.map(renderTranscriptEntry)
   const separator = `${BLUE}${DIM}·${RESET}`
   const lines: string[] = []
@@ -112,17 +173,37 @@ export function renderTranscript(
   entries: TranscriptEntry[],
   scrollOffset: number,
   windowSize?: number,
+  selection?: TranscriptSelection,
 ): string {
   if (entries.length === 0) {
     return ''
   }
 
-  const lines = renderTranscriptLines(entries)
+  let lines = renderTranscriptLines(entries)
   const pageSize = getTranscriptWindowSize(windowSize)
   const maxOffset = Math.max(0, lines.length - pageSize)
   const offset = Math.max(0, Math.min(scrollOffset, maxOffset))
   const end = lines.length - offset
   const start = Math.max(0, end - pageSize)
+
+  if (selection) {
+    lines = lines.map((line, index) => {
+      if (index < selection.startLine || index > selection.endLine) {
+        return line
+      }
+      if (index === selection.startLine && index === selection.endLine) {
+        return highlightRange(line, selection.startCol, selection.endCol)
+      }
+      if (index === selection.startLine) {
+        return highlightRange(line, selection.startCol, Infinity)
+      }
+      if (index === selection.endLine) {
+        return highlightRange(line, 0, selection.endCol)
+      }
+      return highlightRange(line, 0, Infinity)
+    })
+  }
+
   const body = lines.slice(start, end).join('\n')
 
   if (offset === 0) {
@@ -130,4 +211,27 @@ export function renderTranscript(
   }
 
   return `${body}\n\n${DIM}scroll offset: ${offset}${RESET}`
+}
+
+export function extractSelectedText(
+  entries: TranscriptEntry[],
+  selection: TranscriptSelection,
+): string {
+  const lines = renderTranscriptLines(entries)
+  const { startLine, startCol, endLine, endCol } = selection
+
+  const result: string[] = []
+  for (let i = startLine; i <= endLine && i < lines.length; i++) {
+    const plainLine = stripAnsi(lines[i])
+    if (i === startLine && i === endLine) {
+      result.push(plainLine.slice(startCol, endCol))
+    } else if (i === startLine) {
+      result.push(plainLine.slice(startCol))
+    } else if (i === endLine) {
+      result.push(plainLine.slice(0, endCol))
+    } else {
+      result.push(plainLine)
+    }
+  }
+  return result.join('\n')
 }

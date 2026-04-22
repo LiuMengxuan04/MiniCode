@@ -30,6 +30,13 @@ type ParsedInputEvent =
       kind: 'wheel'
       direction: 'up' | 'down'
     }
+  | {
+      kind: 'mouse'
+      x: number
+      y: number
+      button: 'left' | 'middle' | 'right'
+      action: 'press' | 'release' | 'drag'
+    }
 
 type ParseResult = {
   events: ParsedInputEvent[]
@@ -72,6 +79,9 @@ function parseEscapeSequence(input: string): {
   let match = /^\u001b\[<(\d+);(\d+);(\d+)([Mm])/.exec(input)
   if (match) {
     const button = Number(match[1])
+    const x = Number(match[2]) - 1
+    const y = Number(match[3]) - 1
+    const released = match[4] === 'm'
     const length = match[0].length
     if ((button & 0x43) === 0x40) {
       return { event: { kind: 'wheel', direction: 'up' }, length }
@@ -79,7 +89,20 @@ function parseEscapeSequence(input: string): {
     if ((button & 0x43) === 0x41) {
       return { event: { kind: 'wheel', direction: 'down' }, length }
     }
-    return { event: null, length }
+    const btnCode = button & 0x43
+    const isDrag = (button & 0x20) !== 0
+    const buttonName: 'left' | 'middle' | 'right' =
+      btnCode === 0 ? 'left' : btnCode === 1 ? 'middle' : 'right'
+    return {
+      event: {
+        kind: 'mouse',
+        x,
+        y,
+        button: buttonName,
+        action: released ? 'release' : isDrag ? 'drag' : 'press',
+      },
+      length,
+    }
   }
 
   if (/^\u001b\[M.../.test(input)) {
@@ -191,11 +214,6 @@ export function parseInputChunk(
 
   while (index < input.length) {
     const remaining = input.slice(index)
-
-    if (/^\[<\d+;\d+;\d+[Mm]/.test(remaining)) {
-      index += remaining.match(/^\[<\d+;\d+;\d+[Mm]/)?.[0].length ?? 1
-      continue
-    }
 
     if (remaining[0] === ESC) {
       if (maybeNeedMoreForEscapeSequence(remaining)) {
