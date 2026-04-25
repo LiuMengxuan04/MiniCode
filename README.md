@@ -234,6 +234,25 @@ MINI_CODE_MODEL_MODE=mock npm run dev
 - input history navigation
 - approval selection and feedback input flow (Up/Down + Enter, or key shortcuts)
 
+### Session management
+
+MiniCode automatically saves your conversation after each turn. Each launch creates a new session with a unique ID.
+
+- `/resume` — open interactive session picker
+- `/resume <id>` — resume a specific session by ID
+- `/rename <name>` — rename the current session
+- `/new` — start a fresh session (previous session is preserved)
+- `/fork` — fork the current session into a new independent copy
+- `/compact` — compress context to free up context window space
+
+CLI flags:
+
+- `minicode --resume` — launch with session picker
+- `minicode --resume <id>` — resume a specific session
+- `minicode --fork <id>` — fork a session and resume the fork
+
+Sessions are scoped per working directory and stored in `~/.mini-code/projects/` using append-only JSONL. On exit, MiniCode prints the session ID so you can resume later. Sessions older than 30 days are automatically cleaned up.
+
 ## Configuration
 
 Example configuration:

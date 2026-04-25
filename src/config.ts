@@ -37,10 +37,11 @@ export const MINI_CODE_DIR = process.env.MINI_CODE_HOME
   ? path.resolve(process.env.MINI_CODE_HOME)
   : path.join(os.homedir(), '.mini-code')
 export const MINI_CODE_SETTINGS_PATH = path.join(MINI_CODE_DIR, 'settings.json')
-export const MINI_CODE_HISTORY_PATH = path.join(MINI_CODE_DIR, 'history.json')
+export const MINI_CODE_HISTORY_PATH = path.join(MINI_CODE_DIR, 'history.jsonl')
 export const MINI_CODE_PERMISSIONS_PATH = path.join(MINI_CODE_DIR, 'permissions.json')
 export const MINI_CODE_MCP_PATH = path.join(MINI_CODE_DIR, 'mcp.json')
 export const MINI_CODE_MCP_TOKENS_PATH = path.join(MINI_CODE_DIR, 'mcp-tokens.json')
+export const MINI_CODE_PROJECTS_DIR = path.join(MINI_CODE_DIR, 'projects')
 export const CLAUDE_SETTINGS_PATH = path.join(os.homedir(), '.claude', 'settings.json')
 export const PROJECT_MCP_PATH = path.join(process.cwd(), '.mcp.json')
 

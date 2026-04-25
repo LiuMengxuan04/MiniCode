@@ -56,6 +56,26 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     description: 'Show configured MCP servers and connection state.',
   },
   {
+    name: '/resume',
+    usage: '/resume',
+    description: 'Resume a saved session (interactive picker, or /resume <id>).',
+  },
+  {
+    name: '/rename',
+    usage: '/rename <name>',
+    description: 'Rename the current session.',
+  },
+  {
+    name: '/new',
+    usage: '/new',
+    description: 'Clear saved session and start fresh.',
+  },
+  {
+    name: '/fork',
+    usage: '/fork',
+    description: 'Fork current session into a new independent session.',
+  },
+  {
     name: '/permissions',
     usage: '/permissions',
     description: 'Show mini-code permission storage path.',
