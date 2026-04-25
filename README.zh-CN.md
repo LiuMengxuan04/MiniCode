@@ -231,6 +231,25 @@ MINI_CODE_MODEL_MODE=mock npm run dev
 - 历史输入导航
 - 审批界面上下键选择与反馈输入（也支持快捷键直接选择）
 
+### 会话管理
+
+MiniCode 每轮对话后自动保存。每次启动会创建新的会话，分配唯一 ID。
+
+- `/resume` — 打开会话选择器
+- `/resume <id>` — 恢复指定会话
+- `/rename <name>` — 重命名当前会话
+- `/new` — 开始新会话（旧会话保留）
+- `/fork` — 将当前会话分叉为独立副本
+- `/compact` — 压缩上下文，释放 context window 空间
+
+CLI 参数：
+
+- `minicode --resume` — 启动时打开会话选择器
+- `minicode --resume <id>` — 恢复指定会话
+- `minicode --fork <id>` — 分叉指定会话并恢复
+
+会话按工作目录隔离，存储在 `~/.mini-code/projects/`，采用追加写入的 JSONL 格式。退出时会打印 session ID，方便后续恢复。超过 30 天的会话会自动清理。
+
 ## 配置
 
 配置示例：

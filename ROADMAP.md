@@ -31,15 +31,7 @@ Possible follow-ups include a more uniform configurable retry policy, richer obs
 
 ### 3. Session persistence and resume
 
-MiniCode should be able to save and resume sessions reliably.
-
-This includes:
-
-- autosave
-- manual resume
-- basic session recovery
-
-This is important for real-world usage and longer task execution.
+**Status: implemented.** Sessions are saved per working directory in `~/.mini-code/projects/` using append-only JSONL with parentUuid tree structure. Includes `/resume`, `/rename`, `/new`, `/fork`, `/compact` commands, interactive session picker with delete support, `--resume`/`--fork` CLI flags, and automatic 30-day expiry cleanup.
 
 ### 4. Multi-language implementation branches
 

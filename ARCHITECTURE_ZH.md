@@ -36,7 +36,7 @@ MiniCode 优先保留这些能力：
 - 复杂 permission 模式
 - feature flag 体系
 - telemetry / analytics
-- compact / memory / session restore
+- compact / memory / session restore（基础 session 持久化和 compact boundary 已实现）
 
 
 
@@ -54,6 +54,7 @@ MiniCode 优先保留这些能力：
 - `src/anthropic-adapter.ts`: Anthropic 兼容 Messages API 适配器
 - `src/mock-model.ts`: 离线回退适配器
 - `src/permissions.ts`: 路径、命令、编辑审批与 allowlist / denylist
+- `src/session.ts`: 多会话持久化，追加写入 JSONL，parentUuid 树结构，compact boundary，会话分叉，过期清理
 - `src/file-review.ts`: 写文件前 diff review
 - `src/tui/*`: transcript / chrome / input / screen / markdown 终端组件
 
@@ -76,5 +77,5 @@ MiniCode 的一个优势，是用更轻量的实现方式，提供了类 Claude 
 1. 更完整的虚拟滚动 transcript
 2. 更完整的输入编辑行为
 3. 更细的工具执行状态面板
-4. 会话历史与项目记忆
+4. 会话历史与项目记忆（会话持久化已实现；项目记忆仍待开发）
 5. 更强的 UI 组件化

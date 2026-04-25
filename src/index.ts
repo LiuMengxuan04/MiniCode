@@ -1,3 +1,4 @@
+import crypto from 'node:crypto'
 import readline from 'node:readline'
 import process from 'node:process'
 import { AnthropicModelAdapter } from './anthropic-adapter.js'
@@ -7,6 +8,7 @@ import {
   tryHandleLocalCommand,
 } from './cli-commands.js'
 import { loadRuntimeConfig } from './config.js'
+import { forkSession } from './session.js'
 import { maybeHandleManagementCommand } from './manage-cli.js'
 import { summarizeMcpServers } from './mcp-status.js'
 import { MockModelAdapter } from './mock-model.js'
@@ -21,6 +23,31 @@ import { runAgentTurn } from './agent-loop.js'
 async function main(): Promise<void> {
   const cwd = process.cwd()
   const argv = process.argv.slice(2)
+
+  let resumeTarget: string | 'picker' | undefined
+  const resumeIndex = argv.indexOf('--resume')
+  if (resumeIndex !== -1) {
+    argv.splice(resumeIndex, 1)
+    const nextArg = argv[resumeIndex]
+    if (nextArg && !nextArg.startsWith('-')) {
+      resumeTarget = nextArg
+      argv.splice(resumeIndex, 1)
+    } else {
+      resumeTarget = 'picker'
+    }
+  }
+
+  let forkTarget: string | undefined
+  const forkIndex = argv.indexOf('--fork')
+  if (forkIndex !== -1) {
+    argv.splice(forkIndex, 1)
+    const nextArg = argv[forkIndex]
+    if (nextArg && !nextArg.startsWith('-')) {
+      forkTarget = nextArg
+      argv.splice(forkIndex, 1)
+    }
+  }
+
   if (await maybeHandleManagementCommand(cwd, argv)) {
     return
   }
@@ -72,6 +99,19 @@ async function main(): Promise<void> {
 
   try {
     if (isInteractiveTerminal) {
+      let sessionId = crypto.randomUUID().slice(0, 8)
+      let resolvedResumeTarget = resumeTarget
+
+      if (forkTarget) {
+        const forkedId = await forkSession(cwd, forkTarget)
+        if (forkedId) {
+          sessionId = forkedId
+          resolvedResumeTarget = forkedId
+        } else {
+          console.error(`Session ${forkTarget} not found or empty.`)
+        }
+      }
+
       await runTtyApp({
         runtime,
         tools,
@@ -79,6 +119,9 @@ async function main(): Promise<void> {
         messages,
         cwd,
         permissions,
+        sessionId,
+        alreadySavedCount: 0,
+        resumeTarget: resolvedResumeTarget,
       })
       return
     }

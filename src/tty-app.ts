@@ -1,3 +1,4 @@
+import crypto from 'node:crypto'
 import process from 'node:process'
 import { listBackgroundTasks } from './background-tasks.js'
 import { runAgentTurn } from './agent-loop.js'
@@ -15,6 +16,19 @@ import {
   PermissionRequest,
 } from './permissions.js'
 import { buildSystemPrompt } from './prompt.js'
+import {
+  saveSession,
+  loadSession,
+  clearSession,
+  listSessions,
+  renameSession,
+  appendCompactBoundary,
+  loadTranscript,
+  forkSession,
+  cleanupExpiredSessions,
+  listAllProjects,
+} from './session.js'
+import type { SessionMeta, ProjectMeta } from './session.js'
 import { parseInputChunk, type ParsedInputEvent } from './tui/input-parser.js'
 import {
   clearScreen,
@@ -49,6 +63,9 @@ type TtyAppArgs = {
   messages: ChatMessage[]
   cwd: string
   permissions: PermissionManager
+  sessionId: string
+  alreadySavedCount: number
+  resumeTarget?: string | 'picker'
 }
 
 type PendingApproval = {
@@ -59,6 +76,16 @@ type PendingApproval = {
   selectedChoiceIndex: number
   feedbackMode: boolean
   feedbackInput: string
+}
+
+type SessionPicker = {
+  sessions: SessionMeta[]
+  selectedIndex: number
+  resolve: (sessionId: string | null) => void
+  deleteConfirmIndex: number | null
+  allProjects: boolean
+  projects: ProjectMeta[]
+  projectSelectedIndex: number
 }
 
 type ScreenState = {
@@ -75,6 +102,7 @@ type ScreenState = {
   historyDraft: string
   nextEntryId: number
   pendingApproval: PendingApproval | null
+  sessionPicker: SessionPicker | null
   isBusy: boolean
   contextStats: ContextStats | null
   compressionStatus: string | null
@@ -85,6 +113,17 @@ type TranscriptEntryDraft =
   | Omit<Extract<TranscriptEntry, { kind: 'assistant' }>, 'id'>
   | Omit<Extract<TranscriptEntry, { kind: 'progress' }>, 'id'>
   | Omit<Extract<TranscriptEntry, { kind: 'tool' }>, 'id'>
+
+function formatRelativeTime(timestamp: number): string {
+  const seconds = Math.floor((Date.now() - timestamp) / 1000)
+  if (seconds < 60) return 'just now'
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  return `${days}d ago`
+}
 
 function getSessionStats(args: TtyAppArgs, state: ScreenState) {
   const mcpStatus = summarizeMcpServers(args.tools.getMcpServers())
@@ -463,6 +502,41 @@ function renderScreen(args: TtyAppArgs, state: ScreenState): void {
     return
   }
 
+  if (state.sessionPicker) {
+    if (state.sessionPicker.allProjects) {
+      const projects = state.sessionPicker.projects
+      const lines = projects.map((p, i) => {
+        const marker = i === state.sessionPicker!.projectSelectedIndex ? ' > ' : '   '
+        const ago = formatRelativeTime(p.latestUpdatedAt)
+        return `${marker}${p.dir}  ${p.sessionCount} sessions  ${ago}`
+      })
+      const body = `All projects:\n\n${lines.join('\n')}\n\nEnter to see info, Tab to go back, Esc to cancel`
+      console.log(renderPanel('projects', body))
+    } else {
+      const lines = state.sessionPicker.sessions.map((s, i) => {
+        const marker = i === state.sessionPicker!.selectedIndex ? ' > ' : '   '
+        const title = s.title ? `  ${s.title}` : ''
+        const ago = formatRelativeTime(s.updatedAt)
+        const deleteTag = state.sessionPicker!.deleteConfirmIndex === i ? '  [DELETE? Press d again to confirm]' : ''
+        return `${marker}${s.id}${title}  ${s.messageCount} messages  ${ago}${deleteTag}`
+      })
+      const body = `Select a session to resume:\n\n${lines.join('\n')}\n\n↑/↓ to select, Enter to resume, d to delete, Tab for all projects, Esc to cancel`
+      console.log(renderPanel('sessions', body))
+    }
+    console.log('')
+    console.log(
+      renderFooterBar(
+        state.status,
+        true,
+        args.tools.getSkills().length > 0,
+        summarizeMcpServers(args.tools.getMcpServers()),
+        backgroundTasks,
+        state.compressionStatus,
+      ),
+    )
+    return
+  }
+
   console.log(
     renderPanel(
       'session feed',
@@ -557,6 +631,54 @@ async function executeToolShortcut(
   }
 }
 
+async function resumeSession(
+  args: TtyAppArgs,
+  state: ScreenState,
+  sessionId: string,
+  loaded: ChatMessage[],
+): Promise<void> {
+  args.sessionId = sessionId
+  const systemContent =
+    args.messages[0]?.role === 'system' ? args.messages[0].content : ''
+  await refreshSystemPrompt(args)
+  args.messages.length = 0
+  args.messages.push({ role: 'system', content: systemContent })
+  args.messages.push(...loaded)
+  state.transcript = []
+  const persistedTranscript = await loadTranscript(args.cwd, sessionId)
+  if (persistedTranscript && persistedTranscript.length > 0) {
+    for (const entry of persistedTranscript) {
+      pushTranscriptEntry(state, entry)
+    }
+  } else {
+    for (const msg of loaded) {
+      if (msg.role === 'user') {
+        pushTranscriptEntry(state, { kind: 'user', body: msg.content })
+      } else if (msg.role === 'assistant') {
+        pushTranscriptEntry(state, { kind: 'assistant', body: msg.content })
+      } else if (msg.role === 'assistant_tool_call') {
+        pushTranscriptEntry(state, {
+          kind: 'tool',
+          toolName: msg.toolName,
+          status: 'success',
+          body: summarizeToolInput(msg.toolName, msg.input),
+        })
+      } else if (msg.role === 'context_summary') {
+        pushTranscriptEntry(state, {
+          kind: 'assistant',
+          body: `[Context summary: ${msg.compressedCount} messages compressed]`,
+        })
+      }
+    }
+  }
+  pushTranscriptEntry(state, {
+    kind: 'assistant',
+    body: `Session ${sessionId} resumed (${loaded.length} messages loaded).`,
+  })
+  args.alreadySavedCount = loaded.length
+  state.transcriptScrollOffset = 0
+}
+
 async function handleInput(
   args: TtyAppArgs,
   state: ScreenState,
@@ -598,8 +720,11 @@ async function handleInput(
     try {
       const result = await manualCompact(args.messages, args.model)
       if (result) {
+        const summaryText = typeof result.summary.content === 'string' ? result.summary.content : ''
+        await appendCompactBoundary(args.cwd, args.sessionId, summaryText, 'manual', result.tokensBefore, result.tokensAfter)
         args.messages.length = 0
         args.messages.push(...result.messages)
+        args.alreadySavedCount = args.messages.length - 1
         const savedPct = Math.round((1 - result.tokensAfter / result.tokensBefore) * 100)
         const savedTokens = result.tokensBefore - result.tokensAfter
         state.compressionStatus = `ctx -${savedPct}% (saved ${savedTokens >= 1000 ? `${Math.round(savedTokens / 1000)}K` : savedTokens} tokens)`
@@ -635,9 +760,117 @@ async function handleInput(
     return false
   }
 
+  if (input.startsWith('/rename ')) {
+    const newName = input.slice('/rename '.length).trim()
+    if (!newName) {
+      pushTranscriptEntry(state, {
+        kind: 'assistant',
+        body: 'Usage: /rename <name>',
+      })
+      return false
+    }
+    const ok = await renameSession(args.cwd, args.sessionId, newName)
+    pushTranscriptEntry(state, {
+      kind: 'assistant',
+      body: ok ? `Session renamed to "${newName}".` : 'No active session to rename.',
+    })
+    return false
+  }
+
+  if (input === '/resume' || input.startsWith('/resume ')) {
+    const sessionIdArg = input.startsWith('/resume ') ? input.slice('/resume '.length).trim() : ''
+
+    if (!sessionIdArg) {
+      const sessions = await listSessions(args.cwd)
+      if (sessions.length === 0) {
+        pushTranscriptEntry(state, {
+          kind: 'assistant',
+          body: 'No saved sessions for this project.',
+        })
+        return false
+      }
+
+      const selectedId = await new Promise<string | null>(resolve => {
+        state.sessionPicker = {
+          sessions,
+          selectedIndex: 0,
+          resolve,
+          deleteConfirmIndex: null,
+          allProjects: false,
+          projects: [],
+          projectSelectedIndex: 0,
+        }
+        state.status = 'Select a session to resume'
+        rerender()
+      })
+
+      state.sessionPicker = null
+      state.status = null
+      rerender()
+
+      if (!selectedId) return false
+
+      const loaded = await loadSession(args.cwd, selectedId)
+      if (!loaded || loaded.length === 0) {
+        pushTranscriptEntry(state, {
+          kind: 'assistant',
+          body: `Session ${selectedId} not found.`,
+        })
+        return false
+      }
+      await resumeSession(args, state, selectedId, loaded)
+      return false
+    }
+
+    // Direct resume by id
+    const loaded = await loadSession(args.cwd, sessionIdArg)
+    if (!loaded || loaded.length === 0) {
+      pushTranscriptEntry(state, {
+        kind: 'assistant',
+        body: `Session ${sessionIdArg} not found.`,
+      })
+      return false
+    }
+    await resumeSession(args, state, sessionIdArg, loaded)
+    return false
+  }
+
+  if (input === '/new') {
+    args.sessionId = crypto.randomUUID().slice(0, 8)
+    args.alreadySavedCount = 0
+    state.transcript = []
+    args.messages.length = 0
+    await refreshSystemPrompt(args)
+    state.transcriptScrollOffset = 0
+    pushTranscriptEntry(state, {
+      kind: 'assistant',
+      body: 'Session cleared. Starting fresh.',
+    })
+    return false
+  }
+
+  if (input === '/fork') {
+    const newId = await forkSession(args.cwd, args.sessionId)
+    if (!newId) {
+      pushTranscriptEntry(state, {
+        kind: 'assistant',
+        body: 'No current session to fork.',
+      })
+      return false
+    }
+    args.sessionId = newId
+    args.alreadySavedCount = args.messages.length - 1
+    state.transcriptScrollOffset = 0
+    pushTranscriptEntry(state, {
+      kind: 'assistant',
+      body: `Session forked. Now in session ${newId}. Original session preserved.`,
+    })
+    return false
+  }
+
   if (state.history.at(-1) !== input) {
     state.history.push(input)
-    await saveHistoryEntries(state.history)
+    await saveHistoryEntries(state.history, args.cwd, args.sessionId)
   }
   state.historyIndex = state.history.length
   state.historyDraft = ''
@@ -724,6 +957,9 @@ async function handleInput(
           kind: 'assistant',
           body: `Context auto-compressed: ${result.removedCount} messages summarized.`,
         })
+        const summaryText = typeof result.summary.content === 'string' ? result.summary.content : ''
+        void appendCompactBoundary(args.cwd, args.sessionId, summaryText, 'auto', result.tokensBefore, result.tokensAfter)
+        args.alreadySavedCount = 2 // boundary + summary events appended
         state.transcriptScrollOffset = 0
         setTimeout(() => {
           state.compressionStatus = null
@@ -872,6 +1108,8 @@ async function handleInput(
     })
     args.messages.length = 0
     args.messages.push(...nextMessages)
+    await saveSession(args.cwd, args.sessionId, args.messages, args.alreadySavedCount)
+    args.alreadySavedCount = args.messages.length - 1
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     args.messages.push({
@@ -936,6 +1174,7 @@ export async function runTtyApp(args: TtyAppArgs): Promise<void> {
     historyDraft: '',
     nextEntryId: 1,
     pendingApproval: null,
+    sessionPicker: null,
     isBusy: false,
     contextStats: null,
     compressionStatus: null,
@@ -957,6 +1196,35 @@ export async function runTtyApp(args: TtyAppArgs): Promise<void> {
     await refreshSystemPrompt(permissionArgs)
   }
 
+  let deferredResumeInput: string | null = null
+  if (permissionArgs.resumeTarget) {
+    if (permissionArgs.resumeTarget === 'picker') {
+      deferredResumeInput = '/resume'
+    } else {
+      await handleInput(
+        permissionArgs,
+        state,
+        () => renderScreen(permissionArgs, state),
+        `/resume ${permissionArgs.resumeTarget}`,
+      )
+    }
+  } else {
+    const expired = await cleanupExpiredSessions(args.cwd, 30 * 24 * 60 * 60 * 1000)
+    if (expired > 0) {
+      pushTranscriptEntry(state, {
+        kind: 'assistant',
+        body: `Cleaned up ${expired} expired session(s) (>30 days old).`,
+      })
+    }
+    const sessions = await listSessions(args.cwd)
+    if (sessions.length > 0) {
+      pushTranscriptEntry(state, {
+        kind: 'assistant',
+        body: `Found ${sessions.length} saved session(s). Type /resume to continue one.`,
+      })
+    }
+  }
+
   renderScreen(permissionArgs, state)
 
   await new Promise<void>(resolve => {
@@ -975,7 +1243,7 @@ export async function runTtyApp(args: TtyAppArgs): Promise<void> {
       showCursor()
       exitAlternateScreen()
       process.stdin.pause()
-      process.stdout.write('mini-code exited.\n')
+      process.stdout.write(`Session ${permissionArgs.sessionId} saved. To resume: minicode --resume ${permissionArgs.sessionId}\n`)
     }
 
     const finish = () => {
@@ -1143,6 +1411,135 @@ export async function runTtyApp(args: TtyAppArgs): Promise<void> {
             state.pendingApproval = null
             state.status = null
             pending.resolve({ decision: 'deny_once' })
+            renderScreen(permissionArgs, state)
+            return
+          }
+
+          return
+        }
+
+        if (state.sessionPicker) {
+          if (event.kind === 'text' && event.ctrl && event.text === 'c') {
+            state.sessionPicker.resolve(null)
+            state.sessionPicker = null
+            state.status = null
+            renderScreen(permissionArgs, state)
+            return
+          }
+
+          // All-projects view
+          if (state.sessionPicker.allProjects) {
+            if (event.kind === 'key' && event.name === 'up') {
+              if (state.sessionPicker.projectSelectedIndex > 0) {
+                state.sessionPicker.projectSelectedIndex -= 1
+                renderScreen(permissionArgs, state)
+              }
+              return
+            }
+
+            if (event.kind === 'key' && event.name === 'down') {
+              if (state.sessionPicker.projectSelectedIndex < state.sessionPicker.projects.length - 1) {
+                state.sessionPicker.projectSelectedIndex += 1
+                renderScreen(permissionArgs, state)
+              }
+              return
+            }
+
+            if (event.kind === 'key' && event.name === 'return') {
+              const proj = state.sessionPicker.projects[state.sessionPicker.projectSelectedIndex]
+              if (proj && proj.sessionCount > 0) {
+                state.sessionPicker = null
+                state.status = null
+                pushTranscriptEntry(state, {
+                  kind: 'assistant',
+                  body: `Project "${proj.dir}" has ${proj.sessionCount} session(s). Switch to it by exiting and running:\n\n  cd <project-path> && minicode --resume`,
+                })
+                renderScreen(permissionArgs, state)
+              }
+              return
+            }
+
+            if ((event.kind === 'key' && event.name === 'tab') || (event.kind === 'key' && event.name === 'escape')) {
+              state.sessionPicker.allProjects = false
+              renderScreen(permissionArgs, state)
+              return
+            }
+
+            return
+          }
+
+          // Session list view
+          if (event.kind === 'key' && event.name === 'up') {
+            const picker = state.sessionPicker
+            if (picker.selectedIndex > 0) {
+              picker.selectedIndex -= 1
+              picker.deleteConfirmIndex = null
+              renderScreen(permissionArgs, state)
+            }
+            return
+          }
+
+          if (event.kind === 'key' && event.name === 'down') {
+            const picker = state.sessionPicker
+            if (picker.selectedIndex < picker.sessions.length - 1) {
+              picker.selectedIndex += 1
+              picker.deleteConfirmIndex = null
+              renderScreen(permissionArgs, state)
+            }
+            return
+          }
+
+          if (event.kind === 'key' && event.name === 'return') {
+            const picker = state.sessionPicker
+            const selected = picker.sessions[picker.selectedIndex]
+            const id = selected?.id ?? null
+            state.sessionPicker = null
+            state.status = null
+            picker.resolve(id)
+            renderScreen(permissionArgs, state)
+            return
+          }
+
+          // 'd' to delete — first press marks, second press confirms
+          if (event.kind === 'text' && !event.ctrl && !event.meta && event.text === 'd') {
+            const picker = state.sessionPicker
+            if (picker.deleteConfirmIndex === picker.selectedIndex) {
+              // Second press — confirm delete
+              const target = picker.sessions[picker.selectedIndex]
+              if (target) {
+                await clearSession(args.cwd, target.id)
+                const sessions = await listSessions(args.cwd)
+                if (sessions.length === 0) {
+                  state.sessionPicker.resolve(null)
+                  state.sessionPicker = null
+                  state.status = null
+                  renderScreen(permissionArgs, state)
+                  return
+                }
+                picker.sessions = sessions
+                picker.selectedIndex = Math.min(picker.selectedIndex, sessions.length - 1)
+                picker.deleteConfirmIndex = null
+              }
+            } else {
+              picker.deleteConfirmIndex = picker.selectedIndex
+            }
+            renderScreen(permissionArgs, state)
+            return
+          }
+
+          // Tab — switch to all-projects view
+          if (event.kind === 'key' && event.name === 'tab') {
+            state.sessionPicker.allProjects = true
+            state.sessionPicker.projects = await listAllProjects()
+            state.sessionPicker.projectSelectedIndex = 0
+            renderScreen(permissionArgs, state)
+            return
+          }
+
+          if (event.kind === 'key' && event.name === 'escape') {
+            state.sessionPicker.resolve(null)
+            state.sessionPicker = null
+            state.status = null
             renderScreen(permissionArgs, state)
             return
           }
@@ -1428,5 +1825,39 @@ export async function runTtyApp(args: TtyAppArgs): Promise<void> {
     process.stdin.on('data', onData)
     process.stdin.once('end', onEnd)
     process.stdin.once('close', onClose)
+
+    // Handle deferred --resume (picker mode)
+    if (deferredResumeInput) {
+      const input = deferredResumeInput
+      deferredResumeInput = null
+      submitInFlight = true
+      void (async () => {
+        try {
+          const shouldExit = await handleInput(
+            permissionArgs,
+            state,
+            () => renderScreen(permissionArgs, state),
+            input,
+          )
+          if (shouldExit) {
+            finish()
+            return
+          }
+          renderScreen(permissionArgs, state)
+        } catch (error) {
+          pushTranscriptEntry(state, {
+            kind: 'assistant',
+            body: error instanceof Error ? error.message : String(error),
+          })
+          state.input = ''
+          state.cursorOffset = 0
+          state.selectedSlashIndex = 0
+          state.status = null
+          renderScreen(permissionArgs, state)
+        } finally {
+          submitInFlight = false
+        }
+      })()
+    }
   })
 }

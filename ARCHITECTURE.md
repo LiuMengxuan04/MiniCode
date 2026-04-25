@@ -36,7 +36,7 @@ In other words, MiniCode is a smaller, more controllable terminal coding assista
 - More complex permission modes
 - Feature-flag system
 - Telemetry / analytics
-- Compact / memory / session restore
+- Compact / memory / session restore (basic session persistence and compact boundary are now implemented)
 
 ## Current implementation
 
@@ -52,6 +52,7 @@ In other words, MiniCode is a smaller, more controllable terminal coding assista
 - `src/anthropic-adapter.ts`: Anthropic-compatible Messages API adapter
 - `src/mock-model.ts`: offline fallback adapter
 - `src/permissions.ts`: path, command, and edit approval with allowlist / denylist
+- `src/session.ts`: multi-session persistence with append-only JSONL, parentUuid tree structure, compact boundary, session forking, and expiry cleanup
 - `src/file-review.ts`: diff review before writing files
 - `src/tui/*`: transcript / chrome / input / screen / markdown terminal components
 
@@ -74,5 +75,5 @@ That makes it well suited to:
 1. A more complete virtual-scrolling transcript
 2. Richer input editing behavior
 3. A finer-grained tool execution status panel
-4. Session history and project memory
+4. Session history and project memory (session persistence is now implemented; project memory is still planned)
 5. Stronger UI componentization
