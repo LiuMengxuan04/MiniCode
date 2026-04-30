@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "tsx src/index.ts",
     "check": "tsc --noEmit",
-    "test": "node --import tsx --test test/*.test.ts",
+    "test": "node test/run-tests.mjs",
     "install-local": "tsx src/install.ts"
   },
   "dependencies": {
