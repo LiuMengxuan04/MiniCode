@@ -220,16 +220,24 @@ export function renderInitMiniMd(cwd: string): string {
 
 async function ensureDir(dirPath: string): Promise<InitStatus> {
   try {
-    await stat(dirPath)
+    const existing = await stat(dirPath)
+    if (!existing.isDirectory()) {
+      throw new Error(`Cannot initialize: ${dirPath} exists and is not a directory`)
+    }
     return 'skipped'
-  } catch {
-    // Directory doesn't exist, create it
+  } catch (error) {
+    if (!isEnoentError(error)) throw error
   }
+
   try {
     await mkdir(dirPath, { recursive: true })
     return 'created'
-  } catch {
-    return 'skipped'
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+      const existing = await stat(dirPath)
+      if (existing.isDirectory()) return 'skipped'
+    }
+    throw error
   }
 }
 

@@ -61,16 +61,13 @@ If you are interested in maintaining or extending the Python or Rust variants, o
 
 ### 5. Layered memory loading
 
-**Status: mostly implemented.** MiniCode now loads instruction files from a three-layer hierarchy: user global (`~/.mini-code/MINI.md`), project root, and nested directories (walked upward from cwd). Supports `MINI.md`, `MINI.local.md`, `.mini-code/MINI.md`, plus compatibility scanning for `CLAUDE.md` and `.claude/CLAUDE.md`. Includes content deduplication and capacity limits.
+**Status: implemented.** MiniCode now loads instruction files from a three-layer hierarchy: user global (`~/.mini-code/MINI.md`), project root, and nested directories (walked upward from cwd). Supports `MINI.md`, `MINI.local.md`, `.mini-code/MINI.md`, `.mini-code/rules/*.md`, plus compatibility scanning for `CLAUDE.md` and `.claude/CLAUDE.md`. Includes content deduplication, `@path` include resolution, `/memory` inspection, and capacity limits.
 
 The `/init` command bootstraps a project: creates `.mini-code/`, adds MiniCode entries to `.gitignore`, and generates a `MINI.md` template with auto-detected stack (languages, frameworks, verification commands, repository shape). Idempotent — safe to re-run.
 
 Planned follow-ups:
 
-- `@path` include resolution
-- `.mini-code/rules/*.md` auto-discovery
-- Auto memory read/write
-- `/memory` command to inspect loaded files
+- auto memory read/write
 
 ### 6. Stronger provider abstraction
 

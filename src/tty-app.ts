@@ -893,6 +893,7 @@ async function handleInput(
   }
 
   const localCommandResult = await tryHandleLocalCommand(input, {
+    cwd: args.cwd,
     tools: args.tools,
   })
   if (localCommandResult !== null) {

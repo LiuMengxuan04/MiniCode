@@ -57,7 +57,7 @@ In other words, MiniCode is a smaller, more controllable terminal coding assista
 - `src/mock-model.ts`: offline fallback adapter
 - `src/permissions.ts`: path, command, and edit approval with allowlist / denylist
 - `src/session.ts`: multi-session persistence with append-only JSONL, parentUuid tree structure, compact boundary, session forking, and expiry cleanup
-- `src/memory.ts`: layered instruction file loading (`MINI.md` / `CLAUDE.md`), upward directory walk, content deduplication, and capacity-limited rendering
+- `src/memory.ts`: layered instruction file loading (`MINI.md` / `CLAUDE.md` / `.mini-code/rules/*.md`), upward directory walk, `@path` includes, `/memory` reporting, content deduplication, and capacity-limited rendering
 - `src/init.ts`: project bootstrapping — creates `.mini-code/`, adds MiniCode entries to `.gitignore`, and generates a `MINI.md` template with auto-detected stack (languages, frameworks, verification commands). Idempotent `/init` slash command.
 - `src/file-review.ts`: diff review before writing files
 - `src/tui/*`: transcript / chrome / input / screen / markdown terminal components

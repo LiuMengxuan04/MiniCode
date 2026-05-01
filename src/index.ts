@@ -164,7 +164,7 @@ async function main(): Promise<void> {
           continue
         }
 
-        const localCommandResult = await tryHandleLocalCommand(input, { tools })
+        const localCommandResult = await tryHandleLocalCommand(input, { cwd, tools })
         if (localCommandResult !== null) {
           console.log(`\n${localCommandResult}\n`)
           continue

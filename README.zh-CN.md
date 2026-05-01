@@ -262,11 +262,13 @@ CLI 参数：
 
 MiniCode 启动时从三层层级加载指令文件：
 
-1. **用户全局**：`~/.mini-code/MINI.md`（同时兼容读取 `~/.mini-code/CLAUDE.md`）
-2. **项目根及祖先目录**：从 cwd 向上递归，读取 `MINI.md`、`MINI.local.md`、`.mini-code/MINI.md`、`CLAUDE.md`、`CLAUDE.local.md`、`.claude/CLAUDE.md`
+1. **用户全局**：`~/.mini-code/MINI.md`（同时兼容读取 `~/.mini-code/CLAUDE.md`），以及按文件名排序的 `~/.mini-code/rules/*.md`
+2. **项目根及祖先目录**：从 cwd 向上递归，读取 `MINI.md`、`MINI.local.md`、`.mini-code/MINI.md`、`CLAUDE.md`、`CLAUDE.local.md`、`.claude/CLAUDE.md`，以及每层按文件名排序的 `.mini-code/rules/*.md`
 3. **优先级**：越靠近 cwd 的内容优先级越高
 
-相同内容的文件会自动去重。单文件上限约 8k 字符，总量上限约 20k 字符。
+相同内容的文件会自动去重。单文件上限约 8k 字符，总量上限约 20k 字符。在交互 UI 中输入 `/memory` 可以查看实际加载的文件、scope、行数、字符数和首行预览。
+
+指令文件支持用单独一行 `@relative/path.md` 引入其他文件。include 路径相对当前指令文件解析；绝对路径和包含父目录跳转（`..`）的路径会被跳过，循环 include 会被检测并跳过。
 
 `MINI.md` 示例：
 
@@ -276,6 +278,8 @@ MiniCode 启动时从三层层级加载指令文件：
 - 使用 TypeScript strict 模式。
 - 提交前运行 `npm run check`。
 - 保持改动最小且聚焦。
+
+@.mini-code/rules/testing.md
 ```
 
 ## 长会话与上下文管理

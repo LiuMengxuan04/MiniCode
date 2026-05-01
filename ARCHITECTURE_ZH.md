@@ -59,7 +59,7 @@ MiniCode 优先保留这些能力：
 - `src/mock-model.ts`: 离线回退适配器
 - `src/permissions.ts`: 路径、命令、编辑审批与 allowlist / denylist
 - `src/session.ts`: 多会话持久化，追加写入 JSONL，parentUuid 树结构，compact boundary，会话分叉，过期清理
-- `src/memory.ts`: 分层指令文件加载（`MINI.md` / `CLAUDE.md`），向上目录递归，内容去重，容量限制渲染
+- `src/memory.ts`: 分层指令文件加载（`MINI.md` / `CLAUDE.md` / `.mini-code/rules/*.md`），向上目录递归，`@path` include，`/memory` 报告，内容去重，容量限制渲染
 - `src/init.ts`: 项目初始化 — 创建 `.mini-code/`，向 `.gitignore` 追加 MiniCode 条目，根据项目结构检测生成 `MINI.md` 模板（语言、框架、验证命令）。幂等 `/init` 命令。
 - `src/file-review.ts`: 写文件前 diff review
 - `src/tui/*`: transcript / chrome / input / screen / markdown 终端组件
