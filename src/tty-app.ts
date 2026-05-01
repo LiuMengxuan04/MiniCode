@@ -16,6 +16,7 @@ import {
   PermissionRequest,
 } from './permissions.js'
 import { buildSystemPrompt } from './prompt.js'
+import { discoverInstructionFiles } from './memory.js'
 import {
   saveSession,
   loadSession,
@@ -892,6 +893,7 @@ async function handleInput(
   }
 
   const localCommandResult = await tryHandleLocalCommand(input, {
+    cwd: args.cwd,
     tools: args.tools,
   })
   if (localCommandResult !== null) {
@@ -1202,6 +1204,23 @@ export async function runTtyApp(args: TtyAppArgs): Promise<void> {
     permissionArgs.messages[0]?.role !== 'system'
   ) {
     await refreshSystemPrompt(permissionArgs)
+  }
+
+  // Show loaded instruction files at startup
+  const memoryFiles = await discoverInstructionFiles(args.cwd)
+  if (memoryFiles.length > 0) {
+    const lines = [
+      `Memory: ${memoryFiles.length} instruction file(s) loaded`,
+      ...memoryFiles.map((f, i) => {
+        const lineCount = f.content.split('\n').length
+        const preview = f.content.trim().split('\n')[0] || '<empty>'
+        return `  ${i + 1}. ${f.path}\n     lines=${lineCount} preview=${preview}`
+      }),
+    ]
+    pushTranscriptEntry(state, {
+      kind: 'assistant',
+      body: lines.join('\n'),
+    })
   }
 
   let deferredResumeInput: string | null = null

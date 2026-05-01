@@ -1,5 +1,10 @@
 node_modules/
 tmp/
 dist/
+~/
 .DS_Store
 *.log
+
+# MiniCode local artifacts
+.mini-code/settings.local.json
+.mini-code/sessions/

@@ -6,6 +6,8 @@ import {
   loadRuntimeConfig,
   saveMiniCodeSettings,
 } from './config.js'
+import { initializeRepo, renderInitReport } from './init.js'
+import { discoverInstructionFiles, renderMemoryReport } from './memory.js'
 import type { ToolRegistry } from './tool.js'
 
 export type SlashCommand = {
@@ -130,6 +132,16 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     usage: '/compact',
     description: 'Compress conversation context to free up context window space.',
   },
+  {
+    name: '/init',
+    usage: '/init',
+    description: 'Create .mini-code/, .gitignore entries, and MINI.md in the current project (idempotent).',
+  },
+  {
+    name: '/memory',
+    usage: '/memory',
+    description: 'Show instruction files loaded into the system prompt.',
+  },
 ]
 
 export function formatSlashCommands(): string {
@@ -145,9 +157,12 @@ export function findMatchingSlashCommands(input: string): string[] {
 export async function tryHandleLocalCommand(
   input: string,
   context?: {
+    cwd?: string
     tools?: ToolRegistry
   },
 ): Promise<string | null> {
+  const cwd = context?.cwd ?? process.cwd()
+
   if (input === '/') {
     return formatSlashCommands()
   }
@@ -215,6 +230,16 @@ export async function tryHandleLocalCommand(
       `mcp servers: ${Object.keys(runtime.mcpServers).length}`,
       runtime.sourceSummary,
     ].join('\n')
+  }
+
+  if (input === '/init') {
+    const report = await initializeRepo(cwd)
+    return renderInitReport(report)
+  }
+
+  if (input === '/memory') {
+    const files = await discoverInstructionFiles(cwd)
+    return renderMemoryReport(files, cwd)
   }
 
   if (input === '/model') {

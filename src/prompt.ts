@@ -1,16 +1,6 @@
-import { readFile } from 'node:fs/promises'
-import os from 'node:os'
-import path from 'node:path'
 import type { McpServerSummary } from './mcp.js'
 import type { SkillSummary } from './skills.js'
-
-async function maybeRead(filePath: string): Promise<string | null> {
-  try {
-    return await readFile(filePath, 'utf8')
-  } catch {
-    return null
-  }
-}
+import { loadMemory } from './memory.js'
 
 export async function buildSystemPrompt(
   cwd: string,
@@ -20,9 +10,6 @@ export async function buildSystemPrompt(
     mcpServers?: McpServerSummary[]
   },
 ): Promise<string> {
-  const globalClaudeMd = await maybeRead(path.join(os.homedir(), '.claude', 'CLAUDE.md'))
-  const projectClaudeMd = await maybeRead(path.join(cwd, 'CLAUDE.md'))
-
   const parts = [
     'You are mini-code, a terminal coding assistant.',
     'Default behavior: inspect the repository, use tools, make code changes when appropriate, and explain results clearly.',
@@ -102,12 +89,9 @@ export async function buildSystemPrompt(
     }
   }
 
-  if (globalClaudeMd) {
-    parts.push(`Global instructions from ~/.claude/CLAUDE.md:\n${globalClaudeMd}`)
-  }
-
-  if (projectClaudeMd) {
-    parts.push(`Project instructions from ${path.join(cwd, 'CLAUDE.md')}:\n${projectClaudeMd}`)
+  const memorySection = await loadMemory(cwd)
+  if (memorySection) {
+    parts.push(memorySection)
   }
 
   return parts.join('\n\n')
