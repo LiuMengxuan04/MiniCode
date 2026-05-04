@@ -24,7 +24,7 @@ MiniCode 优先保留这些能力：
 - 保留消息驱动的终端交互节奏
 - 保留路径权限、命令权限、写入审批这些安全边界
 - 保留受 Claude Code 启发的扩展点：本地 skills 和 MCP 动态工具
-- 通过追加写入的会话历史、compact boundary、provider usage 上下文记账和大工具输出替换，让长时间会话保持可用
+- 通过追加写入的会话历史、compact boundary、provider usage 上下文记账、大工具输出替换、确定性裁剪压缩和上下文折叠投影，让长时间会话保持可用
 
 ## 待完成的功能：
 
@@ -52,10 +52,10 @@ MiniCode 优先保留这些能力：
 - `src/mcp.ts`: 启动 stdio MCP server，协商兼容的 framing，并把远端 MCP tools 封装成当前工具协议
 - `src/background-tasks.ts`: 给 `run_command` 和 TUI 使用的最小 background shell task 注册表
 - `src/manage-cli.ts`: 管理持久化 MCP 配置和本地安装的 skills
-- `src/anthropic-adapter.ts`: Anthropic 兼容 Messages API 适配器
+- `src/anthropic-adapter.ts`: Anthropic 兼容 Messages API 适配器，支持跨工具调用轮次保留 thinking block
 - `src/utils/token-estimator.ts`: 结构化 token accounting。provider-reported usage 可用时作为主数据源；本地估算只用于缺失 usage 的 fallback，以及最新 provider usage boundary 之后的 tail messages。
 - `src/utils/tool-result-storage.ts`: 将超大工具结果持久化到 MiniCode 本地数据目录，并在可见上下文里替换成预览和文件路径；同一次运行中会复用稳定替换结果。
-- `src/compact/*`: 上下文压缩与自动压缩。auto-compact 使用结构化 accounting total；compact 后会把保留下来的压缩前 provider usage 标记为 stale。
+- `src/compact/*`: 上下文压缩与自动压缩。包括上下文折叠投影层（可摘要片段识别与替换）、确定性裁剪压缩（安全移除中段历史，保护编辑和出错轮次），以及结构化 accounting 集成。auto-compact 使用结构化 accounting total；compact 后会把保留下来的压缩前 provider usage 标记为 stale。
 - `src/mock-model.ts`: 离线回退适配器
 - `src/permissions.ts`: 路径、命令、编辑审批与 allowlist / denylist
 - `src/session.ts`: 多会话持久化，追加写入 JSONL，parentUuid 树结构，compact boundary，会话分叉，过期清理

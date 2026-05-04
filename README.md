@@ -96,7 +96,7 @@ MiniCode is a good fit if you want:
 - full-screen terminal interface
 - input history, transcript scrolling, and slash command menu
 - per-project session persistence with resume, rename, fork, and compact commands
-- model-aware context stats with provider usage, estimated tail tokens, and auto-compact
+- model-aware context stats with provider usage, estimated tail tokens, auto-compact, context collapse, and snip compact
 - discoverable local skills via `SKILL.md`
 - dynamic MCP tool loading over stdio
 - MCP resources and prompts via generic MCP helper tools
@@ -147,6 +147,9 @@ MiniCode is a good fit if you want:
 - context accounting is now provider-usage-driven: provider-reported usage anchors the context stats, auto-compact trigger, blocking/warning levels, and TUI context badge; the local estimator is used only when provider usage is unavailable or for messages added after the latest usage boundary
 - the TUI context badge distinguishes exact provider usage from estimated tail text, for example `ctx 82% ... usage+est`; compacted conversations mark retained pre-compact usage stale so it is not reused as current context truth
 - large tool results are persisted under MiniCode's local data directory and replaced in the model context by a preview plus file path; repeated passes reuse the same replacement so accounting stays stable
+- deterministic snip compact removes safe middle-history messages while protecting file-editing and error turns, keeping recent conversation intact
+- context collapse projection layer identifies summarizable spans in long conversations and replaces them with concise summaries to stay within context limits
+- Anthropic thinking blocks are now preserved across tool-call turns, maintaining chain-of-thought continuity through multi-step tool execution
 
 ## Installation
 
@@ -270,8 +273,8 @@ MiniCode now treats long-running conversations as a first-class workflow:
 - If messages are added after the latest provider usage boundary, MiniCode adds a local tail estimate and labels the badge accordingly, for example `usage+est`.
 - If no provider usage is available, MiniCode falls back to local estimation so offline mode and compatible gateways still work.
 - Context stats feed the TUI badge, warning/blocking levels, and auto-compact trigger.
-- `/compact` performs manual context compression and records a compact boundary in the session log.
-- Automatic compaction can summarize older turns once utilization gets high.
+- `/compact` performs manual context compression using snip compact or context collapse and records a compact boundary in the session log.
+- Automatic compaction can summarize or snip older turns once utilization gets high, using either **snip compact** (deterministic middle-history removal that protects edits and errors) or **context collapse** (projection-layer summarization of conversation spans).
 - After compaction, retained pre-compact usage is marked stale so an old provider total is not mistaken for the current context size.
 - Oversized tool results are written to `~/.mini-code/tool-results/` and replaced in the visible context with a preview and the full-output path. A single result over `50_000` characters is persisted, and batches are reduced toward a `200_000` character visible budget.
 
@@ -511,7 +514,7 @@ If you want to study the project as a learning resource, continue with:
 - `src/mcp.ts`: stdio MCP client and dynamic tool wrapping
 - `src/manage-cli.ts`: top-level `minicode mcp` / `minicode skills` management commands
 - `src/session.ts`: append-only session JSONL, resume/fork/rename, compact boundaries, and expiry cleanup
-- `src/compact/*`: manual compact, auto-compact, and conversation summarization helpers
+- `src/compact/*`: manual compact, auto-compact, context collapse projection layer, deterministic snip compact, and conversation summarization helpers
 - `src/utils/token-estimator.ts`: provider-usage-first context accounting with estimate fallback
 - `src/utils/tool-result-storage.ts`: large tool-output persistence and preview replacement
 - `src/tools/*`: built-in tools

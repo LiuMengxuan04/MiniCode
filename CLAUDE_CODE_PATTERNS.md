@@ -103,7 +103,7 @@ Claude Code does not treat long-context management as simple deletion. Older con
 
 ### What MiniCode makes visible
 
-MiniCode follows the same direction. When conversation state becomes too large, earlier messages can be summarized into a `context_summary`, and the recent tail is preserved. Auto-compact is driven by structured context stats rather than a blind message count.
+MiniCode follows the same direction. When conversation state becomes too large, earlier messages can be summarized into a `context_summary`, and the recent tail is preserved. Two complementary auto-compact strategies are available: **snip compact** (deterministic middle-history removal that protects file edits and errors) and **context collapse** (projection-layer summarization of conversation spans). Auto-compact is driven by structured context stats rather than a blind message count.
 
 ## 9. Provider Usage as Context Truth
 

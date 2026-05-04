@@ -96,7 +96,7 @@ MiniCode 围绕一个实用的 terminal-first agent loop 构建：
 - 全屏终端交互界面
 - 输入历史、transcript 滚动和 slash 命令菜单
 - 按项目隔离的会话持久化，支持恢复、重命名、分叉和压缩
-- 模型感知的上下文统计，支持 provider usage、tail estimate 和自动压缩
+- 模型感知的上下文统计，支持 provider usage、tail estimate、自动压缩、上下文折叠和裁剪压缩
 - 支持通过 `SKILL.md` 发现本地 skills
 - 支持通过 stdio 动态加载 MCP tools
 - 支持通过通用 MCP helper tools 访问 resources 和 prompts
@@ -146,6 +146,9 @@ MiniCode 围绕一个实用的 terminal-first agent loop 构建：
 - 上下文 token 记账已改为 provider usage 驱动：供应商返回的 usage 会作为 context stats、自动压缩触发、warning/blocking 级别和 TUI context badge 的主要来源；本地估算器只在 provider 未返回 usage 或最新 usage boundary 之后存在新增消息时作为 fallback/tail estimate
 - TUI context badge 会区分真实 usage 和估算 tail，例如 `ctx 82% ... usage+est`；压缩后的会话会把保留下来的旧 usage 标记为 stale，避免把压缩前的 usage 当作当前上下文真实值
 - 大工具结果会持久化到 MiniCode 的本地数据目录，并在模型上下文里替换为预览和文件路径；同一个结果的重复处理会复用替换内容，让 token accounting 保持稳定
+- 确定性裁剪压缩（snip compact）会安全地移除中段历史消息，同时保护文件编辑和出错轮次，保留近期对话完整
+- 上下文折叠（context collapse）投影层能识别长对话中可摘要的片段，替换为简洁摘要以保持在 context window 限制内
+- Anthropic thinking block 现在会在跨工具调用轮次间保留，确保多步工具执行过程中思维链的连续性
 
 ## 安装
 
@@ -269,8 +272,8 @@ MiniCode 现在把长会话作为一等工作流处理：
 - 如果最新 provider usage boundary 之后又追加了消息，MiniCode 会补充本地 tail estimate，并在 badge 中标记来源，例如 `usage+est`。
 - 如果 provider 不返回 usage，MiniCode 会回退到本地估算，因此离线模式和兼容网关仍然可用。
 - 上下文统计会驱动 TUI badge、warning/blocking 级别和自动压缩触发。
-- `/compact` 会手动压缩上下文，并在会话日志中写入 compact boundary。
-- 当上下文利用率过高时，自动压缩可以总结旧轮次，为后续对话腾出空间。
+- `/compact` 会手动压缩上下文（使用裁剪压缩或上下文折叠），并在会话日志中写入 compact boundary。
+- 当上下文利用率过高时，自动压缩会自动触发，使用**裁剪压缩**（snip compact：确定性移除中段历史，保护编辑和出错轮次）或**上下文折叠**（context collapse：投影层摘要对话片段）来为后续对话腾出空间。
 - 压缩后，保留下来的压缩前 usage 会被标记为 stale，避免把旧 provider 总量误认为当前上下文大小。
 - 超大工具结果会写入 `~/.mini-code/tool-results/`，并在可见上下文里替换成预览和完整输出路径。单个结果超过 `50_000` 字符会落盘；一批工具结果会被压到约 `200_000` 字符的可见预算内。
 
@@ -511,7 +514,7 @@ MiniCode 当前主要支持：
 - `src/mcp.ts`: stdio MCP 客户端与动态工具封装
 - `src/manage-cli.ts`: 顶层 `minicode mcp` / `minicode skills` 管理命令
 - `src/session.ts`: 追加写入的会话 JSONL、恢复/分叉/重命名、compact boundary 和过期清理
-- `src/compact/*`: 手动压缩、自动压缩和对话摘要辅助逻辑
+- `src/compact/*`: 手动压缩、自动压缩、上下文折叠投影层、确定性裁剪压缩和对话摘要辅助逻辑
 - `src/utils/token-estimator.ts`: provider usage 优先的上下文记账与本地估算 fallback
 - `src/utils/tool-result-storage.ts`: 大工具输出持久化与预览替换
 - `src/tools/*`: 内置工具集合

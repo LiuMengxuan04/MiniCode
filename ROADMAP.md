@@ -10,7 +10,7 @@ Pull requests are welcome, especially when they align with the contribution guid
 
 ### 1. Model-aware context management
 
-**Status: mostly implemented; follow-up polish remains.**
+**Status: largely implemented; context collapse and snip compact now provide two complementary auto-compact strategies. Follow-up polish may include finer-grained collapse triggers and heuristics.**
 
 This is the most important missing runtime capability.
 
@@ -23,6 +23,11 @@ It includes:
 - large tool-result replacement, where oversized outputs are persisted to disk and only a preview/path remains in the model-visible context
 
 MiniCode now records provider usage on assistant response boundaries and computes context stats from a structured accounting result. The local estimator remains available for providers that do not return usage, offline tests, and tail messages appended after the latest provider usage boundary. Compaction marks retained pre-compact usage stale so the next context calculation does not treat an old response's usage as the current conversation total. Oversized tool outputs are written to the local MiniCode data directory and replaced with stable preview messages, so long command output no longer dominates context accounting.
+
+Two compaction strategies are now available:
+
+- **Snip compact** (deterministic): safely removes middle-history messages while protecting file-editing operations and error turns, keeping recent conversation intact. Triggered when context utilization exceeds the snip threshold.
+- **Context collapse** (projection layer): identifies summarizable spans of conversation and replaces them with model-generated summaries. Works as a complementary strategy when snip compact alone is insufficient or when deeper history compression is needed.
 
 This work matters because long-session stability depends on it. It is also one of the most important design areas where MiniCode still trails a more complete Claude Code-style runtime.
 
