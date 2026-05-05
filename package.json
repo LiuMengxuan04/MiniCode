@@ -10,7 +10,7 @@
     "dev": "tsx src/index.ts",
     "check": "tsc --noEmit",
     "lint": "eslint src test",
-    "test": "node --import tsx --test test/*.test.ts",
+    "test": "node test/run-tests.mjs",
     "install-local": "tsx src/install.ts"
   },
   "dependencies": {
