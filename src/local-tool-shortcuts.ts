@@ -15,8 +15,8 @@ export type LocalToolShortcut =
   | { toolName: 'run_command'; input: { command: string; args?: string[]; cwd?: string } }
 
 export function parseLocalToolShortcut(input: string): LocalToolShortcut | null {
-  if (input.startsWith('/ls')) {
-    const dir = input.replace('/ls', '').trim()
+  if (input === '/ls' || input.startsWith('/ls ')) {
+    const dir = input.slice('/ls'.length).trim()
     return {
       toolName: 'list_files',
       input: dir ? { path: dir } : {},
@@ -49,10 +49,12 @@ export function parseLocalToolShortcut(input: string): LocalToolShortcut | null 
     const payload = input.slice('/write '.length)
     const splitAt = payload.indexOf('::')
     if (splitAt === -1) return null
+    const targetPath = payload.slice(0, splitAt).trim()
+    if (!targetPath) return null
     return {
       toolName: 'write_file',
       input: {
-        path: payload.slice(0, splitAt).trim(),
+        path: targetPath,
         content: payload.slice(splitAt + 2),
       },
     }
@@ -62,10 +64,12 @@ export function parseLocalToolShortcut(input: string): LocalToolShortcut | null 
     const payload = input.slice('/modify '.length)
     const splitAt = payload.indexOf('::')
     if (splitAt === -1) return null
+    const targetPath = payload.slice(0, splitAt).trim()
+    if (!targetPath) return null
     return {
       toolName: 'modify_file',
       input: {
-        path: payload.slice(0, splitAt).trim(),
+        path: targetPath,
         content: payload.slice(splitAt + 2),
       },
     }
@@ -74,13 +78,14 @@ export function parseLocalToolShortcut(input: string): LocalToolShortcut | null 
   if (input.startsWith('/edit ')) {
     const payload = input.slice('/edit '.length)
     const [targetPath, search, replace] = payload.split('::')
-    if (!targetPath || search === undefined || replace === undefined) {
+    const trimmedPath = targetPath?.trim()
+    if (!trimmedPath || search === undefined || replace === undefined) {
       return null
     }
     return {
       toolName: 'edit_file',
       input: {
-        path: targetPath.trim(),
+        path: trimmedPath,
         search,
         replace,
       },
