@@ -1,20 +1,22 @@
 import process from 'node:process'
 
-const ENTER_ALT_SCREEN = '\u001b[?1049h'
-const EXIT_ALT_SCREEN = '\u001b[?1049l'
-const ERASE_SCREEN_AND_HOME = '\u001b[2J\u001b[H'
+const ENTER_ALT_SCREEN = '[?1049h'
+const EXIT_ALT_SCREEN = '[?1049l'
+const ERASE_SCREEN_AND_HOME = '[2J[H'
 const ENABLE_MOUSE_TRACKING =
-  '\u001b[?1000h' +
-  '\u001b[?1006h'
+  '[?1000h' +
+  '[?1002h' +
+  '[?1006h'
 const DISABLE_MOUSE_TRACKING =
-  '\u001b[?1006l' +
-  '\u001b[?1000l'
+  '[?1006l' +
+  '[?1002l' +
+  '[?1000l'
 export function hideCursor(): void {
-  process.stdout.write('\u001b[?25l')
+  process.stdout.write('[?25l')
 }
 
 export function showCursor(): void {
-  process.stdout.write('\u001b[?25h')
+  process.stdout.write('[?25h')
 }
 
 export function enterAlternateScreen(): void {
@@ -29,5 +31,5 @@ export function exitAlternateScreen(): void {
 
 export function clearScreen(): void {
   // Softer redraw than full clear to reduce visible flicker.
-  process.stdout.write('\u001b[H\u001b[J')
+  process.stdout.write('[H[J')
 }

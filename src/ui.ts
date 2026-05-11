@@ -17,6 +17,9 @@ export {
   renderToolPanel,
   renderTranscript,
   showCursor,
+  extractSelectedText,
+  renderTranscriptLines,
 } from './tui/index.js'
 
 export type { TranscriptEntry } from './tui/index.js'
+export type { TranscriptSelection } from './tui/index.js'
