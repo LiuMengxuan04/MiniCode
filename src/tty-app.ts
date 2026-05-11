@@ -1414,7 +1414,7 @@ async function handleInput(
             taskSummary: output,
           })
           state.transcriptScrollOffset = 0
-          void appendTaskSnapshot(args.cwd, args.sessionId, toSnapshot(args.taskState))
+          void appendTaskSnapshot(args.cwd, args.sessionId, toSnapshot(args.taskState)).catch(() => {})
         }
 
         state.activeTool = null
