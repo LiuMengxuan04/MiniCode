@@ -101,8 +101,9 @@ Summaries are based on the main repository and multi-language branch commit hist
 ## Multi-language Versions
 
 - TypeScript (this repo): [MiniCode](https://github.com/LiuMengxuan04/MiniCode)
-- Rust version: [MiniCode-rs (latest)](https://github.com/harkerhand/MiniCode-rs/tree/master)
+- Rust version: [MiniCode-rs](https://github.com/harkerhand/MiniCode-rs/tree/master)
 - Python version: [MiniCode-Python](https://github.com/QUSETIONS/MiniCode-Python)
+- Java version: [MiniCode4j](https://github.com/hobbescalvin414-tech/minicode4j/tree/feat/default-ts-ui)
 
 ## Product Showcase Page
 

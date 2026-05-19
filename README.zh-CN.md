@@ -101,8 +101,9 @@ MiniCode 围绕一个 terminal-first agent loop 构建：
 ## 多语言版本
 
 - TypeScript（本仓库）：[MiniCode](https://github.com/LiuMengxuan04/MiniCode)
-- Rust 版本：[MiniCode-rs（最新）](https://github.com/harkerhand/MiniCode-rs/tree/master)
+- Rust 版本：[MiniCode-rs](https://github.com/harkerhand/MiniCode-rs/tree/master)
 - Python 版本：[MiniCode-Python](https://github.com/QUSETIONS/MiniCode-Python)
+- Java 版本：[MiniCode4j](https://github.com/hobbescalvin414-tech/minicode4j/tree/feat/default-ts-ui)
 
 ## 产品展示页
 
