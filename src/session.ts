@@ -10,6 +10,12 @@ import {
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import { MINI_CODE_PROJECTS_DIR } from './config.js'
+import {
+  createTaskState,
+  fromSnapshot,
+  type TaskSnapshot,
+  type TaskState,
+} from './task-state.js'
 import type { ChatMessage } from './types.js'
 import {
   createContextCollapseState,
@@ -19,7 +25,7 @@ import {
 
 const MAX_TITLE_LENGTH = 60
 
-type EventType = 'system' | 'user' | 'assistant' | 'thinking' | 'progress' | 'tool_call' | 'tool_result' | 'summary' | 'compact_boundary' | 'snip_boundary' | 'context_collapse' | 'rename'
+type EventType = 'system' | 'user' | 'assistant' | 'thinking' | 'progress' | 'tool_call' | 'tool_result' | 'summary' | 'compact_boundary' | 'snip_boundary' | 'context_collapse' | 'rename' | 'task_snapshot'
 
 export type SnipBoundaryMetadata = {
   type: 'snip_boundary'
@@ -44,6 +50,7 @@ type SessionEvent = {
   snipMetadata?: SnipBoundaryMetadata
   contextCollapseSpan?: CollapseSpan
   title?: string
+  taskSnapshot?: TaskSnapshot
 }
 
 function projectDirName(cwd: string): string {
@@ -312,6 +319,33 @@ export async function appendContextCollapseSpan(
   await appendFile(filePath, JSON.stringify(event) + '\n', 'utf8')
 }
 
+export async function appendTaskSnapshot(
+  cwd: string,
+  sessionId: string,
+  snapshot: TaskSnapshot,
+): Promise<void> {
+  const dir = projectDir(cwd)
+  const filePath = sessionFilePath(cwd, sessionId)
+  await mkdir(dir, { recursive: true })
+
+  const lastUuid = await readLastEventUuid(filePath)
+  const now = new Date().toISOString()
+
+  const event: SessionEvent = {
+    type: 'task_snapshot',
+    subtype: 'task_snapshot',
+    uuid: randomUUID(),
+    timestamp: now,
+    sessionId,
+    cwd,
+    parentUuid: null,
+    logicalParentUuid: lastUuid,
+    taskSnapshot: snapshot,
+  }
+
+  await appendFile(filePath, JSON.stringify(event) + '\n', 'utf8')
+}
+
 export async function appendCompactBoundary(
   cwd: string,
   sessionId: string,
@@ -432,6 +466,37 @@ export async function loadContextCollapseState(
     }
 
     return state.spans.length > 0 ? state : null
+  } catch {
+    return null
+  }
+}
+
+export async function loadTaskState(
+  cwd: string,
+  sessionId: string,
+): Promise<TaskState | null> {
+  try {
+    const content = await readFile(sessionFilePath(cwd, sessionId), 'utf8')
+    const lines = content.trim().split('\n').filter(Boolean)
+
+    let lastBoundaryIndex = -1
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const event = parseEvent(lines[i]!)
+      if (event?.type === 'compact_boundary') {
+        lastBoundaryIndex = i
+        break
+      }
+    }
+
+    let lastSnapshot: TaskSnapshot | null = null
+    for (let i = lastBoundaryIndex + 1; i < lines.length; i++) {
+      const event = parseEvent(lines[i]!)
+      if (event?.type === 'task_snapshot' && event.taskSnapshot) {
+        lastSnapshot = event.taskSnapshot
+      }
+    }
+
+    return lastSnapshot ? fromSnapshot(lastSnapshot) : null
   } catch {
     return null
   }
@@ -697,6 +762,16 @@ export async function loadTranscript(
             kind: 'assistant',
             body: `[Snipped earlier context: removed ${event.snipMetadata?.removedCount ?? '?'} messages, freed ~${event.snipMetadata?.tokensFreed ?? '?'} tokens]`,
           })
+          break
+        case 'task_snapshot':
+          if (event.taskSnapshot) {
+            const completed = event.taskSnapshot.tasks.filter(t => t.status === 'completed').length
+            const total = event.taskSnapshot.tasks.length
+            entries.push({
+              kind: 'assistant',
+              body: `[Tasks: ${completed}/${total} completed]`,
+            })
+          }
           break
       }
     }

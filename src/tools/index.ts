@@ -2,7 +2,9 @@ import type { McpServerConfig, RuntimeConfig } from '../config.js'
 import type { McpServerSummary } from '../mcp.js'
 import { createMcpBackedTools } from '../mcp.js'
 import { discoverSkills } from '../skills.js'
+import type { TaskState } from '../task-state.js'
 import { ToolRegistry } from '../tool.js'
+import type { ToolDefinition } from '../tool.js'
 import { askUserTool } from './ask-user.js'
 import { editFileTool } from './edit-file.js'
 import { grepFilesTool } from './grep-files.js'
@@ -12,6 +14,7 @@ import { modifyFileTool } from './modify-file.js'
 import { patchFileTool } from './patch-file.js'
 import { readFileTool } from './read-file.js'
 import { runCommandTool } from './run-command.js'
+import { createTaskTrackerTool } from './task-tracker.js'
 import { webFetchTool } from './web-fetch.js'
 import { webSearchTool } from './web-search.js'
 import { writeFileTool } from './write-file.js'
@@ -42,11 +45,12 @@ function buildConnectingMcpSummaries(
 export async function createDefaultToolRegistry(args: {
   cwd: string
   runtime: RuntimeConfig | null
+  taskState?: TaskState
 }): Promise<ToolRegistry> {
   const skills = await discoverSkills(args.cwd)
   const mcpServers = args.runtime?.mcpServers ?? {}
 
-  return new ToolRegistry([
+  const tools: ToolDefinition<unknown>[] = [
     askUserTool,
     listFilesTool,
     grepFilesTool,
@@ -59,7 +63,13 @@ export async function createDefaultToolRegistry(args: {
     createLoadSkillTool(args.cwd),
     webFetchTool,
     webSearchTool,
-  ], {
+  ]
+
+  if (args.taskState) {
+    tools.push(createTaskTrackerTool(args.taskState))
+  }
+
+  return new ToolRegistry(tools, {
     skills,
     mcpServers: buildConnectingMcpSummaries(mcpServers),
   })

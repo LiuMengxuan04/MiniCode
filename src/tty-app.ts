@@ -26,14 +26,22 @@ import {
   appendCompactBoundary,
   appendSnipBoundary,
   appendContextCollapseSpan,
+  appendTaskSnapshot,
   loadTranscript,
   loadContextCollapseState,
+  loadTaskState,
   forkSession,
   cleanupExpiredSessions,
   listAllProjects,
 } from './session.js'
 import type { SessionMeta, ProjectMeta } from './session.js'
 import { spawn } from 'node:child_process'
+import {
+  createTaskState,
+  formatTaskList,
+  toSnapshot,
+  type TaskState,
+} from './task-state.js'
 import { parseInputChunk, type ParsedInputEvent } from './tui/input-parser.js'
 import {
   clearScreen,
@@ -88,6 +96,7 @@ type TtyAppArgs = {
   sessionId: string
   alreadySavedCount: number
   resumeTarget?: string | 'picker'
+  taskState: TaskState
 }
 
 type PendingApproval = {
@@ -139,6 +148,7 @@ type TranscriptEntryDraft =
   | Omit<Extract<TranscriptEntry, { kind: 'assistant' }>, 'id'>
   | Omit<Extract<TranscriptEntry, { kind: 'progress' }>, 'id'>
   | Omit<Extract<TranscriptEntry, { kind: 'tool' }>, 'id'>
+  | Omit<Extract<TranscriptEntry, { kind: 'task_update' }>, 'id'>
 
 function formatRelativeTime(timestamp: number): string {
   const seconds = Math.floor((Date.now() - timestamp) / 1000)
@@ -159,6 +169,12 @@ export function keepSelectionAfterMouseRelease(
 
 function getSessionStats(args: TtyAppArgs, state: ScreenState) {
   const mcpStatus = summarizeMcpServers(args.tools.getMcpServers())
+  const taskSummary = args.taskState.tasks.length > 0
+    ? {
+        completed: args.taskState.tasks.filter(t => t.status === 'completed').length,
+        total: args.taskState.tasks.length,
+      }
+    : null
   return {
     transcriptCount: state.transcript.length,
     messageCount: args.messages.length,
@@ -168,6 +184,7 @@ function getSessionStats(args: TtyAppArgs, state: ScreenState) {
     mcpConnectingCount: mcpStatus.connecting,
     mcpErrorCount: mcpStatus.error,
     contextStats: state.contextStats,
+    taskSummary,
   }
 }
 
@@ -797,6 +814,10 @@ async function resumeSession(
   args.contextCollapseState =
     await loadContextCollapseState(args.cwd, sessionId) ??
     createContextCollapseState()
+  const loadedTaskState = await loadTaskState(args.cwd, sessionId)
+  if (loadedTaskState) {
+    args.taskState = loadedTaskState
+  }
   state.transcriptScrollOffset = 0
 }
 
@@ -1071,6 +1092,7 @@ async function handleInput(
     args.sessionId = crypto.randomUUID().slice(0, 8)
     args.alreadySavedCount = 0
     args.contextCollapseState = createContextCollapseState()
+    args.taskState = createTaskState()
     state.transcript = []
     args.messages.length = 0
     await refreshSystemPrompt(args)
@@ -1108,6 +1130,14 @@ async function handleInput(
   }
   state.historyIndex = state.history.length
   state.historyDraft = ''
+
+  if (input === '/tasks') {
+    pushTranscriptEntry(state, {
+      kind: 'assistant',
+      body: formatTaskList(args.taskState),
+    })
+    return false
+  }
 
   if (input === '/tools') {
     pushTranscriptEntry(state, {
@@ -1307,7 +1337,7 @@ async function handleInput(
         state.transcriptScrollOffset = 0
         rerender()
       },
-      onToolResult(toolName, output, isError) {
+      onToolResult(toolName, output, isError, toolInput) {
         const pending = pendingToolEntries.get(toolName) ?? []
         const entryId = pending.shift()
         pendingToolEntries.set(toolName, pending)
@@ -1373,6 +1403,22 @@ async function handleInput(
             status: isError ? 'error' : 'success',
           })
         }
+
+        if (toolName === 'task_tracker' && !isError) {
+          const input = (toolInput ?? {}) as Record<string, unknown>
+          const action = input.action as string | undefined
+          let taskAction: 'created' | 'updated' | 'completed' = 'updated'
+          if (action === 'create') taskAction = 'created'
+          else if (action === 'complete') taskAction = 'completed'
+          pushTranscriptEntry(state, {
+            kind: 'task_update',
+            action: taskAction,
+            taskSummary: output,
+          })
+          state.transcriptScrollOffset = 0
+          void appendTaskSnapshot(args.cwd, args.sessionId, toSnapshot(args.taskState)).catch(() => {})
+        }
+
         state.activeTool = null
         state.status = 'Thinking...'
         rerender()

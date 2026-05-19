@@ -23,6 +23,7 @@ import {
   applyContextCollapseIfNeeded,
   createContextCollapseState,
 } from './compact/context-collapse.js'
+import { createTaskState } from './task-state.js'
 import { createContentReplacementState } from './utils/tool-result-storage.js'
 
 async function main(): Promise<void> {
@@ -65,9 +66,11 @@ async function main(): Promise<void> {
     runtime = null
   }
 
+  const taskState = createTaskState()
   const tools = await createDefaultToolRegistry({
     cwd,
     runtime,
+    taskState,
   })
   const mcpHydration = hydrateMcpTools({
     cwd,
@@ -128,6 +131,7 @@ async function main(): Promise<void> {
         permissions,
         contentReplacementState,
         contextCollapseState,
+        taskState,
         sessionId,
         alreadySavedCount: 0,
         resumeTarget: resolvedResumeTarget,

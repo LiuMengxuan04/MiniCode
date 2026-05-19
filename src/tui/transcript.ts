@@ -150,6 +150,14 @@ function renderTranscriptEntry(entry: TranscriptEntry): string {
     )}`
   }
 
+  if (entry.kind === 'task_update') {
+    const icon = entry.action === 'created' ? '+'
+      : entry.action === 'completed' ? '✓'
+      : '→'
+    const color = entry.action === 'completed' ? GREEN : YELLOW
+    return `${DIM}task${RESET} ${color}${icon}${RESET} ${entry.taskSummary}`
+  }
+
   const status =
     entry.status === 'running'
       ? `${YELLOW}running${RESET}`

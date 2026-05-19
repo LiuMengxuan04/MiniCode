@@ -133,6 +133,11 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     description: 'Compress conversation context to free up context window space.',
   },
   {
+    name: '/tasks',
+    usage: '/tasks',
+    description: 'Show the current task list.',
+  },
+  {
     name: '/collapse',
     usage: '/collapse',
     description: 'Project old safe context spans into summaries without deleting the transcript.',
