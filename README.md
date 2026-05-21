@@ -100,20 +100,10 @@ Summaries are based on the main repository and multi-language branch commit hist
 
 ## Multi-language Versions
 
-MiniCode now has several language implementations. This repository remains the
-main TypeScript edition and the coordination point for the multi-language
-family.
-
-| Version | Repository | Local path | Focus |
-| --- | --- | --- | --- |
-| TypeScript | [LiuMengxuan04/MiniCode](https://github.com/LiuMengxuan04/MiniCode) | `src/` | Mainline terminal agent, TUI, MCP, skills, sessions, context controls |
-| Python | [QUSETIONS/MiniCode-Python](https://github.com/QUSETIONS/MiniCode-Python) | `external/MiniCode-Python` | Self-regulating coding agent runtime with cybernetic orchestration, memory pipeline, and Python tests |
-| Rust | [harkerhand/MiniCode-rs](https://github.com/harkerhand/MiniCode-rs/tree/master) | `external/MiniCode-rs` | Rust implementation focused on performance and systems-side experimentation |
-| Java | [hobbescalvin414-tech/minicode4j](https://github.com/hobbescalvin414-tech/minicode4j/tree/feat/default-ts-ui) | `external/MiniCode4j` | Java implementation with a TypeScript-style UI direction |
-
-The `external/*` directories are Git submodules, so this repository records the
-exact version of each related implementation that the main README and showcase
-refer to.
+- TypeScript (this repo): [MiniCode](https://github.com/LiuMengxuan04/MiniCode)
+- Rust version: [MiniCode-rs](https://github.com/harkerhand/MiniCode-rs/tree/master)
+- Python version: [MiniCode-Python](https://github.com/QUSETIONS/MiniCode-Python)
+- Java version: [MiniCode4j](https://github.com/hobbescalvin414-tech/minicode4j/tree/feat/default-ts-ui)
 
 ## Product Showcase Page
 

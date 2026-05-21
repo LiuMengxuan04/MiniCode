@@ -100,16 +100,10 @@ MiniCode 围绕一个 terminal-first agent loop 构建：
 
 ## 多语言版本
 
-MiniCode 现在已经形成多语言实现。本仓库仍然是 TypeScript 主版本，也是多语言家族的主目录和协调入口。
-
-| 版本 | 仓库 | 本仓库路径 | 重点 |
-| --- | --- | --- | --- |
-| TypeScript | [LiuMengxuan04/MiniCode](https://github.com/LiuMengxuan04/MiniCode) | `src/` | 主线终端 Agent、TUI、MCP、Skills、会话与上下文控制 |
-| Python | [QUSETIONS/MiniCode-Python](https://github.com/QUSETIONS/MiniCode-Python) | `external/MiniCode-Python` | 自我调节式 Coding Agent，包含控制论编排、记忆管线和 Python 测试体系 |
-| Rust | [harkerhand/MiniCode-rs](https://github.com/harkerhand/MiniCode-rs/tree/master) | `external/MiniCode-rs` | 面向性能和系统侧实验的 Rust 实现 |
-| Java | [hobbescalvin414-tech/minicode4j](https://github.com/hobbescalvin414-tech/minicode4j/tree/feat/default-ts-ui) | `external/MiniCode4j` | Java 实现，沿用 TypeScript 风格的 UI 方向 |
-
-`external/*` 目录以 Git submodule 方式记录，因此主仓库会固定每个相关实现当前关联到的精确版本。
+- TypeScript（本仓库）：[MiniCode](https://github.com/LiuMengxuan04/MiniCode)
+- Rust 版本：[MiniCode-rs](https://github.com/harkerhand/MiniCode-rs/tree/master)
+- Python 版本：[MiniCode-Python](https://github.com/QUSETIONS/MiniCode-Python)
+- Java 版本：[MiniCode4j](https://github.com/hobbescalvin414-tech/minicode4j/tree/feat/default-ts-ui)
 
 ## 产品展示页
 
