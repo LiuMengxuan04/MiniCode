@@ -276,6 +276,7 @@ export function renderBanner(
     mcpConnectedCount: number
     mcpConnectingCount: number
     mcpErrorCount: number
+    taskSummary?: { completed: number; total: number } | null
     contextStats?: {
       utilization: number
       warningLevel: 'normal' | 'warning' | 'critical' | 'blocked'
@@ -318,6 +319,9 @@ export function renderBanner(
       : []),
     ...(session.mcpErrorCount > 0
       ? [colorBadge('mcp-err', String(session.mcpErrorCount), BRIGHT_RED)]
+      : []),
+    ...(session.taskSummary && session.taskSummary.total > 0
+      ? [colorBadge('tasks', `${session.taskSummary.completed}/${session.taskSummary.total}`, CYAN)]
       : []),
   ]
   const metaLine = joinSegmentsWithinWidth(metaBadges, '  ', panelInner)

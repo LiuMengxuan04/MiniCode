@@ -118,7 +118,7 @@ export async function runAgentTurn(args: {
   maxSteps?: number
   modelName?: string
   onToolStart?: (toolName: string, input: unknown) => void
-  onToolResult?: (toolName: string, output: string, isError: boolean) => void
+  onToolResult?: (toolName: string, output: string, isError: boolean, toolInput?: unknown) => void
   onAssistantMessage?: (content: string) => void
   onProgressMessage?: (content: string) => void
   onAutoCompact?: (result: CompressionResult) => void | Promise<void>
@@ -385,7 +385,7 @@ export async function runAgentTurn(args: {
       if (!result.ok) {
         toolErrorCount += 1
       }
-      args.onToolResult?.(call.toolName, result.output, !result.ok)
+      args.onToolResult?.(call.toolName, result.output, !result.ok, call.input)
 
       const toolResult = await replaceLargeToolResult({
         role: 'tool_result',

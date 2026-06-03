@@ -24,3 +24,9 @@ export type TranscriptEntry =
       collapsedSummary?: string
       collapsePhase?: 1 | 2 | 3
     }
+  | {
+      id: number
+      kind: 'task_update'
+      action: 'created' | 'updated' | 'completed'
+      taskSummary: string
+    }
