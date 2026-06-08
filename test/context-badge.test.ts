@@ -8,7 +8,11 @@ function stripAnsi(input: string): string {
 
 describe('renderContextBadge', () => {
   it('renders normal level badge', () => {
-    const result = renderContextBadge({ utilization: 0.23, warningLevel: 'normal' })
+    const result = renderContextBadge({
+      utilization: 0.23,
+      warningLevel: 'normal',
+      remainingTokens: 142_000,
+    })
     const plain = stripAnsi(result)
     assert.ok(plain.includes('ctx'), 'should contain ctx label')
     assert.ok(plain.includes('23%'), 'should show 23%')
@@ -17,32 +21,52 @@ describe('renderContextBadge', () => {
   })
 
   it('renders warning level badge', () => {
-    const result = renderContextBadge({ utilization: 0.68, warningLevel: 'warning' })
+    const result = renderContextBadge({
+      utilization: 0.68,
+      warningLevel: 'warning',
+      remainingTokens: 59_000,
+    })
     const plain = stripAnsi(result)
     assert.ok(plain.includes('68%'))
     assert.ok(plain.includes('ctx'))
   })
 
   it('renders critical level badge', () => {
-    const result = renderContextBadge({ utilization: 0.89, warningLevel: 'critical' })
+    const result = renderContextBadge({
+      utilization: 0.89,
+      warningLevel: 'critical',
+      remainingTokens: 20_000,
+    })
     const plain = stripAnsi(result)
     assert.ok(plain.includes('89%'))
   })
 
   it('renders blocked level badge', () => {
-    const result = renderContextBadge({ utilization: 0.96, warningLevel: 'blocked' })
+    const result = renderContextBadge({
+      utilization: 0.96,
+      warningLevel: 'blocked',
+      remainingTokens: 0,
+    })
     const plain = stripAnsi(result)
     assert.ok(plain.includes('96%'))
   })
 
   it('renders 0% utilization correctly', () => {
-    const result = renderContextBadge({ utilization: 0, warningLevel: 'normal' })
+    const result = renderContextBadge({
+      utilization: 0,
+      warningLevel: 'normal',
+      remainingTokens: 184_000,
+    })
     const plain = stripAnsi(result)
     assert.ok(plain.includes('0%'))
   })
 
   it('renders 100% utilization correctly', () => {
-    const result = renderContextBadge({ utilization: 1, warningLevel: 'blocked' })
+    const result = renderContextBadge({
+      utilization: 1,
+      warningLevel: 'blocked',
+      remainingTokens: 0,
+    })
     const plain = stripAnsi(result)
     assert.ok(plain.includes('100%'))
   })
@@ -94,6 +118,16 @@ describe('renderContextBadge', () => {
     assert.ok(plain.includes('1.2M left'))
   })
 
+  it('promotes rounded 1000K headroom to million-scale display', () => {
+    const result = renderContextBadge({
+      utilization: 0.12,
+      warningLevel: 'normal',
+      remainingTokens: 999_500,
+    })
+    const plain = stripAnsi(result)
+    assert.ok(plain.includes('1M left'))
+  })
+
   it('shows zero remaining headroom when context is blocked', () => {
     const result = renderContextBadge({
       utilization: 1,
@@ -104,14 +138,12 @@ describe('renderContextBadge', () => {
     assert.ok(plain.includes('0 left'))
   })
 
-  it('keeps the previous badge format when headroom is unavailable', () => {
-    const result = renderContextBadge({ utilization: 0.5, warningLevel: 'warning' })
-    const plain = stripAnsi(result)
-    assert.ok(!plain.includes('left'))
-  })
-
   it('uses correct block characters for utilization', () => {
-    const result = renderContextBadge({ utilization: 0.5, warningLevel: 'warning' })
+    const result = renderContextBadge({
+      utilization: 0.5,
+      warningLevel: 'warning',
+      remainingTokens: 92_000,
+    })
     const plain = stripAnsi(result)
     // 50% → 5 filled blocks out of 10
     const filledCount = (plain.match(/\u2593/g) || []).length

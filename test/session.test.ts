@@ -55,6 +55,7 @@ function contextStats(messages: ChatMessage[], effectiveInput = 20_000): Context
     providerUsageTokens: accounting.providerUsageTokens,
     contextWindow: effectiveInput,
     effectiveInput,
+    remainingTokens: Math.max(0, effectiveInput - accounting.totalTokens),
     utilization,
     warningLevel:
       utilization >= 0.95
