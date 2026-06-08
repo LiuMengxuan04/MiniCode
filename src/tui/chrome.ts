@@ -114,6 +114,16 @@ function colorBadge(
   return `${color}[${label}]${RESET} ${BOLD}${value}${RESET}`
 }
 
+function formatCompactTokenCount(tokens: number): string {
+  const value = Math.max(0, Math.floor(tokens))
+  if (value < 1_000) return String(value)
+  if (value < 1_000_000) return `${Math.round(value / 1_000)}K`
+
+  const millions = value / 1_000_000
+  const formatted = millions.toFixed(1).replace(/\.0$/, '')
+  return `${formatted}M`
+}
+
 function joinSegmentsWithinWidth(
   segments: string[],
   separator: string,
@@ -232,6 +242,7 @@ export function renderPanel(
 export function renderContextBadge(stats: {
   utilization: number
   warningLevel: 'normal' | 'warning' | 'critical' | 'blocked'
+  remainingTokens?: number
   accounting?: {
     providerUsageTokens: number
     estimatedTokens: number
@@ -251,6 +262,10 @@ export function renderContextBadge(stats: {
 
   const filled = Math.round(utilization * 10)
   const bar = '\u2593'.repeat(filled) + '\u2591'.repeat(10 - filled)
+  const headroom =
+    stats.remainingTokens !== undefined
+      ? ` ${formatCompactTokenCount(stats.remainingTokens)} left`
+      : ''
   const sourceLabel =
     accounting?.source === 'provider_usage'
       ? 'usage'
@@ -261,7 +276,7 @@ export function renderContextBadge(stats: {
           : ''
   const suffix = sourceLabel ? ` ${sourceLabel}` : ''
 
-  return colorBadge('ctx', `${percent}% ${bar}${suffix}`, color)
+  return colorBadge('ctx', `${percent}% ${bar}${headroom}${suffix}`, color)
 }
 
 export function renderBanner(
@@ -279,6 +294,7 @@ export function renderBanner(
     contextStats?: {
       utilization: number
       warningLevel: 'normal' | 'warning' | 'critical' | 'blocked'
+      remainingTokens?: number
       accounting?: {
         providerUsageTokens: number
         estimatedTokens: number

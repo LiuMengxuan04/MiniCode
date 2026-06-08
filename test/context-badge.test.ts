@@ -51,6 +51,7 @@ describe('renderContextBadge', () => {
     const result = renderContextBadge({
       utilization: 0.82,
       warningLevel: 'warning',
+      remainingTokens: 18_000,
       accounting: {
         providerUsageTokens: 70_000,
         estimatedTokens: 12_000,
@@ -59,7 +60,54 @@ describe('renderContextBadge', () => {
     })
     const plain = stripAnsi(result)
     assert.ok(plain.includes('82%'))
+    assert.ok(plain.includes('18K left'))
     assert.ok(plain.includes('usage+est'))
+  })
+
+  it('shows compact remaining context headroom', () => {
+    const result = renderContextBadge({
+      utilization: 0.68,
+      warningLevel: 'warning',
+      remainingTokens: 59_200,
+    })
+    const plain = stripAnsi(result)
+    assert.ok(plain.includes('59K left'))
+  })
+
+  it('shows small remaining context headroom without a suffix', () => {
+    const result = renderContextBadge({
+      utilization: 0.94,
+      warningLevel: 'critical',
+      remainingTokens: 999,
+    })
+    const plain = stripAnsi(result)
+    assert.ok(plain.includes('999 left'))
+  })
+
+  it('shows million-scale remaining context headroom compactly', () => {
+    const result = renderContextBadge({
+      utilization: 0.12,
+      warningLevel: 'normal',
+      remainingTokens: 1_234_000,
+    })
+    const plain = stripAnsi(result)
+    assert.ok(plain.includes('1.2M left'))
+  })
+
+  it('shows zero remaining headroom when context is blocked', () => {
+    const result = renderContextBadge({
+      utilization: 1,
+      warningLevel: 'blocked',
+      remainingTokens: 0,
+    })
+    const plain = stripAnsi(result)
+    assert.ok(plain.includes('0 left'))
+  })
+
+  it('keeps the previous badge format when headroom is unavailable', () => {
+    const result = renderContextBadge({ utilization: 0.5, warningLevel: 'warning' })
+    const plain = stripAnsi(result)
+    assert.ok(!plain.includes('left'))
   })
 
   it('uses correct block characters for utilization', () => {
