@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdir, rm, readFile } from 'node:fs/promises'
+import { mkdir, rm, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import os from 'node:os'
 import {
@@ -13,18 +13,25 @@ import {
   appendSnipBoundary,
   appendContextCollapseSpan,
   loadContextCollapseState,
+  loadContentReplacementState,
   loadTranscript,
+  loadSessionRuntimeState,
   forkSession,
   cleanupExpiredSessions,
   listAllProjects,
 } from '../src/session.js'
 import { MINI_CODE_PROJECTS_DIR } from '../src/config.js'
+import { projectDirName, sessionFilePath, sessionToolResultsDir } from '../src/session-paths.js'
 import type { AgentStep, ChatMessage, ModelAdapter } from '../src/types.js'
 import type { ContextStats } from '../src/utils/token-estimator.js'
 import {
   estimateMessagesTokens,
   tokenCountWithEstimation,
 } from '../src/utils/token-estimator.js'
+import {
+  createContentReplacementState,
+  replaceLargeToolResult,
+} from '../src/utils/tool-result-storage.js'
 import { snipCompactConversation } from '../src/compact/snipCompact.js'
 import { compactConversation } from '../src/compact/compact.js'
 import type { CollapseSpan } from '../src/compact/context-collapse.js'
@@ -40,10 +47,6 @@ function makeMessages(count: number): ChatMessage[] {
     messages.push({ role: 'assistant', content: `Assistant response ${i}` })
   }
   return messages
-}
-
-function projectDirName(cwd: string): string {
-  return cwd.replace(/[/\\:]+/g, '-').replace(/^-+/, '')
 }
 
 function contextStats(messages: ChatMessage[], effectiveInput = 20_000): ContextStats {
@@ -135,13 +138,17 @@ describe('session persistence', () => {
     assert.equal(loaded, null)
   })
 
-  it('clears an existing session', async () => {
+  it('clears an existing session and removes session artifacts', async () => {
     const cwd = path.join(testDir, 'project-b')
+    const toolResultsDir = sessionToolResultsDir(cwd, 'sess0001')
     await saveSession(cwd, 'sess0001', makeMessages(1))
+    await mkdir(toolResultsDir, { recursive: true })
+    await writeFile(path.join(toolResultsDir, 'artifact.txt'), 'temporary persisted output', 'utf8')
     assert.notEqual(await loadSession(cwd, 'sess0001'), null)
 
     await clearSession(cwd, 'sess0001')
     assert.equal(await loadSession(cwd, 'sess0001'), null)
+    await assert.rejects(readFile(path.join(toolResultsDir, 'artifact.txt'), 'utf8'))
   })
 
   it('clearSession does not throw for nonexistent session', async () => {
@@ -206,6 +213,24 @@ describe('session persistence', () => {
     const filePath = path.join(pdir, 'path001.jsonl')
     const content = await readFile(filePath, 'utf8')
     assert.ok(content.length > 0)
+  })
+
+  it('keeps unsafe session ids inside the project directory', async () => {
+    const cwd = path.join(testDir, 'unsafe-session-id')
+    const sessionId = '../..\\nested/session'
+    await saveSession(cwd, sessionId, makeMessages(1))
+
+    const projectRoot = path.join(MINI_CODE_PROJECTS_DIR, projectDirName(cwd))
+    const filePath = sessionFilePath(cwd, sessionId)
+    const fileRelative = path.relative(projectRoot, filePath)
+    const toolResultsDir = sessionToolResultsDir(cwd, sessionId)
+    const toolResultsRelative = path.relative(projectRoot, toolResultsDir)
+
+    assert.ok(!fileRelative.startsWith('..'))
+    assert.ok(!path.isAbsolute(fileRelative))
+    assert.ok(!toolResultsRelative.startsWith('..'))
+    assert.ok(!path.isAbsolute(toolResultsRelative))
+    assert.ok((await readFile(filePath, 'utf8')).length > 0)
   })
 
   it('appends only new messages with alreadySavedCount', async () => {
@@ -553,6 +578,38 @@ describe('session persistence', () => {
     assert.equal(collapseState!.enabled, true)
   })
 
+  it('loadSessionRuntimeState restores messages, replacement state, and collapse state together', async () => {
+    const cwd = path.join(testDir, 'runtime-state')
+    const sessionId = 'runtime001'
+    const messages = makeMessages(1)
+
+    await saveSession(cwd, sessionId, messages)
+    const loadedBefore = await loadSession(cwd, sessionId)
+    assert.ok(loadedBefore)
+
+    const span: CollapseSpan = {
+      id: 'runtime-collapse-span',
+      startMessageId: loadedBefore![0]!.id!,
+      endMessageId: loadedBefore![0]!.id!,
+      messageIds: [loadedBefore![0]!.id!],
+      summary: 'Runtime collapse state',
+      tokensBefore: 800,
+      tokensAfter: 120,
+      status: 'committed',
+      createdAt: 123,
+      reason: 'context_pressure',
+    }
+
+    await appendContextCollapseSpan(cwd, sessionId, span)
+
+    const state = await loadSessionRuntimeState(cwd, sessionId)
+    assert.ok(state)
+    assert.ok(state!.messages)
+    assert.ok(state!.contentReplacementState)
+    assert.ok(state!.contextCollapseState)
+    assert.deepEqual(state!.contextCollapseState!.spans, [span])
+  })
+
   it('saveSession writes parentUuid chain linking consecutive events', async () => {
     const cwd = path.join(testDir, 'parent-chain')
     await saveSession(cwd, 'chain001', makeMessages(2), 0)
@@ -748,6 +805,10 @@ describe('session persistence', () => {
     const pdir = path.join(MINI_CODE_PROJECTS_DIR, projectDirName(cwd))
     const oldPath = path.join(pdir, 'old001.jsonl')
     await saveSession(cwd, 'old001', makeMessages(1))
+    const oldToolResultsDir = sessionToolResultsDir(cwd, 'old001')
+    await mkdir(oldToolResultsDir, { recursive: true })
+    await writeFile(path.join(oldToolResultsDir, 'artifact.txt'), 'temporary persisted output', 'utf8')
+
     // Set mtime to 31 days ago
     const oldTime = Date.now() - 31 * 24 * 60 * 60 * 1000
     const { utimes } = await import('node:fs/promises')
@@ -757,8 +818,61 @@ describe('session persistence', () => {
 
     assert.equal(removed, 1)
     assert.equal(await loadSession(cwd, 'old001'), null)
+    await assert.rejects(readFile(path.join(oldToolResultsDir, 'artifact.txt'), 'utf8'))
     assert.notEqual(await loadSession(cwd, 'recent001'), null)
     assert.notEqual(await loadSession(cwd, 'recent002'), null)
+  })
+
+  it('loadContentReplacementState reconstructs persisted replacement decisions from saved tool_result content alone', async () => {
+    const cwd = path.join(testDir, 'replacement-state')
+    const sessionId = 'resume001'
+    const original = [
+      '$ npm test',
+      'src/example.test.ts:12: failing snapshot',
+      'note: persisted output preview should remain stable on resume',
+      '',
+    ].join('\n') + 'L'.repeat(50_001)
+    const replacementState = createContentReplacementState({ cwd, sessionId })
+    const replacementResult = await replaceLargeToolResult({
+      role: 'tool_result',
+      toolUseId: 'big001',
+      toolName: 'run_command',
+      content: original,
+      isError: false,
+    }, replacementState, 50_000)
+
+    const messages: ChatMessage[] = [
+      { role: 'system', content: 'sys' },
+      { role: 'assistant_tool_call', toolUseId: 'big001', toolName: 'run_command', input: { command: 'npm test' } },
+      replacementResult,
+      { role: 'assistant_tool_call', toolUseId: 'small001', toolName: 'read_file', input: { path: 'README.md' } },
+      { role: 'tool_result', toolUseId: 'small001', toolName: 'read_file', content: 'README preview', isError: false },
+    ]
+    await saveSession(cwd, sessionId, messages)
+
+    const rawSession = await readFile(sessionFilePath(cwd, sessionId), 'utf8')
+    assert.equal(rawSession.includes('"type":"content_replacement"'), false)
+
+    const loaded = await loadSession(cwd, sessionId)
+    assert.ok(loaded)
+    const state = await loadContentReplacementState(cwd, sessionId)
+    assert.ok(state)
+    assert.ok(state!.seenIds.has('big001'))
+    assert.ok(state!.seenIds.has('small001'))
+    assert.equal(state!.replacements.get('big001'), replacementResult.content)
+    assert.equal(state!.replacements.has('small001'), false)
+
+    const stateFromLoadedMessages = await loadContentReplacementState(cwd, sessionId, loaded!)
+    assert.deepEqual(stateFromLoadedMessages, state)
+
+    const replayed = await replaceLargeToolResult({
+      role: 'tool_result',
+      toolUseId: 'big001',
+      toolName: 'run_command',
+      content: original,
+      isError: false,
+    }, state!)
+    assert.equal(replayed.content, replacementResult.content)
   })
 
   it('listAllProjects returns all projects with sessions', async () => {

@@ -172,6 +172,7 @@ export const runCommandTool: ToolDefinition<Input> = {
     args: z.array(z.string()).optional(),
     cwd: z.string().optional(),
   }),
+  maxResultSizeChars: 30_000,
   async run(input, context) {
     const effectiveCwd = input.cwd
       ? await resolveToolPath(context, input.cwd, 'list')

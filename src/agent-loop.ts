@@ -376,6 +376,12 @@ export async function runAgentTurn(args: {
       result: Awaited<ReturnType<ToolRegistry['execute']>>
       toolResult: PendingToolResult
     }> = []
+    const neverPersistToolNames = new Set(
+      args.tools
+        .list()
+        .filter(tool => tool.maxResultSizeChars !== undefined && !Number.isFinite(tool.maxResultSizeChars))
+        .map(tool => tool.name),
+    )
 
     for (const call of next.calls) {
       args.onToolStart?.(call.toolName, call.input)
@@ -390,13 +396,14 @@ export async function runAgentTurn(args: {
       }
       args.onToolResult?.(call.toolName, result.output, !result.ok)
 
+      const tool = args.tools.find(call.toolName)
       const toolResult = await replaceLargeToolResult({
         role: 'tool_result',
         toolUseId: call.id,
         toolName: call.toolName,
         content: result.output,
         isError: !result.ok,
-      }, contentReplacementState)
+      }, contentReplacementState, tool?.maxResultSizeChars)
 
       executedToolResults.push({
         call,
@@ -405,12 +412,15 @@ export async function runAgentTurn(args: {
       })
     }
 
-    const budgetedResults = await applyToolResultBudget(
+    const { results: budgetedToolResults } = await applyToolResultBudget(
       executedToolResults.map(entry => entry.toolResult),
       contentReplacementState,
+      undefined,
+      neverPersistToolNames,
     )
+
     const toolResultById = new Map(
-      budgetedResults.results.map(result => [result.toolUseId, result]),
+      budgetedToolResults.map(result => [result.toolUseId, result]),
     )
 
     const toolCallMessages = executedToolResults.map((entry, i) => {

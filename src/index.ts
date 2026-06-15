@@ -91,7 +91,7 @@ async function main(): Promise<void> {
       }),
     },
   ]
-  const contentReplacementState = createContentReplacementState()
+  let contentReplacementState = createContentReplacementState({ cwd })
   const contextCollapseState = createContextCollapseState()
 
   async function refreshSystemPrompt(): Promise<void> {
@@ -118,6 +118,8 @@ async function main(): Promise<void> {
           console.error(`Session ${forkTarget} not found or empty.`)
         }
       }
+
+      contentReplacementState = createContentReplacementState({ cwd, sessionId })
 
       await runTtyApp({
         runtime,

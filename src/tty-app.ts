@@ -27,7 +27,7 @@ import {
   appendSnipBoundary,
   appendContextCollapseSpan,
   loadTranscript,
-  loadContextCollapseState,
+  loadSessionRuntimeState,
   forkSession,
   cleanupExpiredSessions,
   listAllProjects,
@@ -1002,8 +1002,15 @@ async function resumeSession(
     body: `Session ${sessionId} resumed (${loaded.length} messages loaded).`,
   })
   args.alreadySavedCount = loaded.length
+  const resumedState = await loadSessionRuntimeState(args.cwd, sessionId)
+  args.contentReplacementState =
+    resumedState?.contentReplacementState ??
+    createContentReplacementState({
+      cwd: args.cwd,
+      sessionId,
+    })
   args.contextCollapseState =
-    await loadContextCollapseState(args.cwd, sessionId) ??
+    resumedState?.contextCollapseState ??
     createContextCollapseState()
   state.transcriptScrollOffset = 0
 }
@@ -1281,6 +1288,10 @@ async function handleInput(
   if (input === '/new') {
     args.sessionId = crypto.randomUUID().slice(0, 8)
     args.alreadySavedCount = 0
+    args.contentReplacementState = createContentReplacementState({
+      cwd: args.cwd,
+      sessionId: args.sessionId,
+    })
     args.contextCollapseState = createContextCollapseState()
     state.transcript = []
     args.messages.length = 0
@@ -1304,6 +1315,10 @@ async function handleInput(
     }
     args.sessionId = newId
     args.alreadySavedCount = args.messages.length - 1
+    args.contentReplacementState = createContentReplacementState({
+      cwd: args.cwd,
+      sessionId: newId,
+    })
     args.contextCollapseState = createContextCollapseState()
     state.transcriptScrollOffset = 0
     pushTranscriptEntry(state, {
@@ -1682,7 +1697,10 @@ export async function runTtyApp(args: TtyAppArgs): Promise<void> {
   const permissionArgs: TtyAppArgs = {
     ...args,
     contentReplacementState:
-      args.contentReplacementState ?? createContentReplacementState(),
+      args.contentReplacementState ?? createContentReplacementState({
+        cwd: args.cwd,
+        sessionId: args.sessionId,
+      }),
     contextCollapseState:
       args.contextCollapseState ?? createContextCollapseState(),
     permissions: new PermissionManager(

@@ -29,6 +29,7 @@ export type ToolDefinition<TInput> = {
   description: string
   inputSchema: Record<string, unknown>
   schema: z.ZodType<TInput>
+  maxResultSizeChars?: number
   run(input: TInput, context: ToolContext): Promise<ToolResult>
 }
 

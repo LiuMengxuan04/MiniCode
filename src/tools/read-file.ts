@@ -30,6 +30,7 @@ export const readFileTool: ToolDefinition<Input> = {
     offset: z.number().int().min(0).optional(),
     limit: z.number().int().min(1).max(MAX_READ_LIMIT).optional(),
   }),
+  maxResultSizeChars: Number.POSITIVE_INFINITY,
   async run(input, context) {
     const target = await resolveToolPath(context, input.path, 'read')
     const content = await readFile(target, 'utf8')

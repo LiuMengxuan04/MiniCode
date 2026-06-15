@@ -10,12 +10,21 @@ import {
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import { MINI_CODE_PROJECTS_DIR } from './config.js'
+import {
+  projectDir,
+  sessionArtifactsDir,
+  sessionFilePath,
+} from './session-paths.js'
 import type { ChatMessage } from './types.js'
 import {
   createContextCollapseState,
   type CollapseSpan,
   type ContextCollapseState,
 } from './compact/context-collapse.js'
+import {
+  reconstructContentReplacementState,
+  type ContentReplacementState,
+} from './utils/tool-result-storage.js'
 
 const MAX_TITLE_LENGTH = 60
 
@@ -46,17 +55,7 @@ type SessionEvent = {
   title?: string
 }
 
-function projectDirName(cwd: string): string {
-  return cwd.replace(/[/\\:]+/g, '-').replace(/^-+/, '')
-}
-
-function projectDir(cwd: string): string {
-  return path.join(MINI_CODE_PROJECTS_DIR, projectDirName(cwd))
-}
-
-function sessionFilePath(cwd: string, sessionId: string): string {
-  return path.join(projectDir(cwd), `${sessionId}.jsonl`)
-}
+type SessionEventDraft = Omit<SessionEvent, 'timestamp' | 'sessionId' | 'cwd'>
 
 function roleToType(role: string): EventType {
   switch (role) {
@@ -79,17 +78,38 @@ function ensureMessageId(message: ChatMessage): string {
   return message.id
 }
 
-function wrapEvent(message: ChatMessage, sessionId: string, cwd: string, parentUuid: string | null): string {
-  const uuid = ensureMessageId(message)
-  const event: SessionEvent = {
-    type: roleToType(message.role),
-    message,
-    uuid,
-    timestamp: new Date().toISOString(),
+function buildSessionEvent(
+  draft: SessionEventDraft,
+  sessionId: string,
+  cwd: string,
+  timestamp: string,
+  parentUuid: string | null,
+  logicalParentUuid?: string | null,
+): SessionEvent {
+  return {
+    ...draft,
+    timestamp,
     sessionId,
     cwd,
     parentUuid,
+    logicalParentUuid,
   }
+}
+
+function buildMessageEvent(
+  message: ChatMessage,
+  sessionId: string,
+  cwd: string,
+  parentUuid: string | null,
+  timestamp = new Date().toISOString(),
+): SessionEvent {
+  const uuid = ensureMessageId(message)
+  const event = buildSessionEvent({
+    type: roleToType(message.role),
+    message,
+    uuid,
+    parentUuid,
+  }, sessionId, cwd, timestamp, parentUuid)
   if (message.role === 'snip_boundary') {
     event.snipMetadata = {
       type: 'snip_boundary',
@@ -100,6 +120,10 @@ function wrapEvent(message: ChatMessage, sessionId: string, cwd: string, parentU
       createdAt: event.timestamp,
     }
   }
+  return event
+}
+
+function serializeSessionEvent(event: SessionEvent): string {
   return JSON.stringify(event)
 }
 
@@ -199,20 +223,114 @@ async function readLastEventUuid(filePath: string): Promise<string | null> {
   }
 }
 
-async function readExistingEventUuids(filePath: string): Promise<Set<string>> {
+/**
+ * Reads the session file once and returns both the set of known event UUIDs
+ * and the UUID of the last event.  Used by `saveSession` to avoid reading the
+ * file twice (once to check for duplicates, once to get the parent UUID).
+ */
+async function readSessionFileMeta(filePath: string): Promise<{
+  existingIds: Set<string>
+  lastUuid: string | null
+}> {
   try {
     const content = await readFile(filePath, 'utf8')
-    const ids = new Set<string>()
-    for (const line of content.trim().split('\n').filter(Boolean)) {
+    const lines = content.trim().split('\n').filter(Boolean)
+    const existingIds = new Set<string>()
+    let lastUuid: string | null = null
+    for (const line of lines) {
       const event = parseEvent(line)
       if (event?.uuid) {
-        ids.add(event.uuid)
+        existingIds.add(event.uuid)
+        lastUuid = event.uuid
       }
     }
-    return ids
+    return { existingIds, lastUuid }
   } catch {
-    return new Set()
+    return { existingIds: new Set(), lastUuid: null }
   }
+}
+
+/**
+ * Reads the raw JSONL lines for a session file.
+ * Returns null if the file does not exist or cannot be read.
+ */
+async function readSessionLines(cwd: string, sessionId: string): Promise<string[] | null> {
+  try {
+    const content = await readFile(sessionFilePath(cwd, sessionId), 'utf8')
+    return content.trim().split('\n').filter(Boolean)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Scans backward to find the index of the last compact_boundary event.
+ * Returns -1 when no boundary exists (i.e., the full file is active).
+ */
+function findLastCompactBoundaryIndex(lines: string[]): number {
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (parseEvent(lines[i]!)?.type === 'compact_boundary') return i
+  }
+  return -1
+}
+
+/**
+ * Returns parsed events that are active after the last compact boundary.
+ * When no boundary exists the entire file is considered active.
+ */
+function activeEventsFromLines(lines: string[]): SessionEvent[] {
+  const startLine = findLastCompactBoundaryIndex(lines) + 1 // +1 on -1 gives 0
+  const events: SessionEvent[] = []
+  for (let i = startLine; i < lines.length; i++) {
+    const event = parseEvent(lines[i]!)
+    if (event) events.push(event)
+  }
+  return events
+}
+
+/**
+ * Ensures the project directory exists and returns the session file path.
+ * Used as the common preamble for all append operations.
+ */
+async function ensureSessionDir(cwd: string, sessionId: string): Promise<string> {
+  const filePath = sessionFilePath(cwd, sessionId)
+  await mkdir(projectDir(cwd), { recursive: true })
+  return filePath
+}
+
+/**
+ * Ensures the session directory exists, then reads the UUID of the last
+ * persisted event.  Returns the file path alongside the UUID so callers
+ * can append without a second round-trip.
+ */
+async function prepareAppend(
+  cwd: string,
+  sessionId: string,
+): Promise<{ filePath: string; lastUuid: string | null }> {
+  const filePath = await ensureSessionDir(cwd, sessionId)
+  const lastUuid = await readLastEventUuid(filePath)
+  return { filePath, lastUuid }
+}
+
+async function appendSessionEvents(
+  cwd: string,
+  sessionId: string,
+  drafts: SessionEventDraft[],
+  timestamp = new Date().toISOString(),
+): Promise<void> {
+  const { filePath, lastUuid } = await prepareAppend(cwd, sessionId)
+  let previousUuid = lastUuid
+  const lines: string[] = []
+
+  for (const [index, draft] of drafts.entries()) {
+    const parentUuid = draft.parentUuid ?? (index === 0 ? null : previousUuid)
+    const logicalParentUuid = draft.logicalParentUuid ?? (index === 0 ? lastUuid : undefined)
+    const event = buildSessionEvent(draft, sessionId, cwd, timestamp, parentUuid, logicalParentUuid)
+    previousUuid = event.uuid
+    lines.push(serializeSessionEvent(event))
+  }
+
+  await appendFile(filePath, lines.join('\n') + '\n', 'utf8')
 }
 
 export async function saveSession(
@@ -221,11 +339,10 @@ export async function saveSession(
   messages: ChatMessage[],
   alreadySavedCount: number = 0,
 ): Promise<void> {
-  const dir = projectDir(cwd)
-  const filePath = sessionFilePath(cwd, sessionId)
-  await mkdir(dir, { recursive: true })
+  const filePath = await ensureSessionDir(cwd, sessionId)
 
-  const existingIds = await readExistingEventUuids(filePath)
+  // Single file read: get existing IDs (for dedup) and last UUID (for parent chain).
+  const { existingIds, lastUuid: initialLastUuid } = await readSessionFileMeta(filePath)
   const nonSystemMessages = messages.slice(1)
   const toSave = nonSystemMessages.filter((message, index) => {
     if (message.id && existingIds.has(message.id)) {
@@ -238,13 +355,12 @@ export async function saveSession(
   })
   if (toSave.length === 0) return
 
-  let parentUuid = await readLastEventUuid(filePath)
+  let parentUuid = initialLastUuid
   const lines: string[] = []
   for (const m of toSave) {
-    const line = wrapEvent(m, sessionId, cwd, parentUuid)
-    const parsed = JSON.parse(line) as SessionEvent
-    parentUuid = parsed.uuid
-    lines.push(line)
+    const event = buildMessageEvent(m, sessionId, cwd, parentUuid)
+    parentUuid = event.uuid
+    lines.push(serializeSessionEvent(event))
   }
   await appendFile(filePath, lines.join('\n') + '\n', 'utf8')
 }
@@ -254,35 +370,23 @@ export async function appendSnipBoundary(
   sessionId: string,
   boundaryMessage: Extract<ChatMessage, { role: 'snip_boundary' }>,
 ): Promise<void> {
-  const dir = projectDir(cwd)
-  const filePath = sessionFilePath(cwd, sessionId)
-  await mkdir(dir, { recursive: true })
-
-  const lastUuid = await readLastEventUuid(filePath)
-  const now = new Date().toISOString()
   const uuid = ensureMessageId(boundaryMessage)
-
-  const event: SessionEvent = {
+  const timestamp = new Date().toISOString()
+  await appendSessionEvents(cwd, sessionId, [{
     type: 'snip_boundary',
     subtype: 'snip_boundary',
     message: boundaryMessage,
     uuid,
-    timestamp: now,
-    sessionId,
-    cwd,
     parentUuid: null,
-    logicalParentUuid: lastUuid,
     snipMetadata: {
       type: 'snip_boundary',
       removedMessageIds: boundaryMessage.removedMessageIds,
       removedCount: boundaryMessage.removedCount,
       tokensFreed: boundaryMessage.tokensFreed,
-      timestamp: now,
-      createdAt: now,
+      timestamp,
+      createdAt: timestamp,
     },
-  }
-
-  await appendFile(filePath, JSON.stringify(event) + '\n', 'utf8')
+  }], timestamp)
 }
 
 export async function appendContextCollapseSpan(
@@ -290,26 +394,13 @@ export async function appendContextCollapseSpan(
   sessionId: string,
   span: CollapseSpan,
 ): Promise<void> {
-  const dir = projectDir(cwd)
-  const filePath = sessionFilePath(cwd, sessionId)
-  await mkdir(dir, { recursive: true })
-
-  const lastUuid = await readLastEventUuid(filePath)
-  const now = new Date().toISOString()
-
-  const event: SessionEvent = {
+  await appendSessionEvents(cwd, sessionId, [{
     type: 'context_collapse',
     subtype: 'context_collapse',
     uuid: span.id,
-    timestamp: now,
-    sessionId,
-    cwd,
     parentUuid: null,
-    logicalParentUuid: lastUuid,
     contextCollapseSpan: span,
-  }
-
-  await appendFile(filePath, JSON.stringify(event) + '\n', 'utf8')
+  }])
 }
 
 export async function appendCompactBoundary(
@@ -321,48 +412,33 @@ export async function appendCompactBoundary(
   postTokens: number,
   retainedMessages: ChatMessage[] = [],
 ): Promise<void> {
-  const dir = projectDir(cwd)
-  const filePath = sessionFilePath(cwd, sessionId)
-  await mkdir(dir, { recursive: true })
+  const boundaryUuid: string = randomUUID()
+  const summaryUuid: string = randomUUID()
 
-  const lastUuid = await readLastEventUuid(filePath)
-  const now = new Date().toISOString()
-
-  const boundary: SessionEvent = {
-    type: 'compact_boundary',
-    subtype: 'compact_boundary',
-    uuid: randomUUID(),
-    timestamp: now,
-    sessionId,
-    cwd,
-    parentUuid: null,
-    logicalParentUuid: lastUuid,
-    compactMetadata: { trigger, preTokens, postTokens },
-  }
-
-  const summary: SessionEvent = {
-    type: 'user',
-    message: { role: 'user', content: summaryText },
-    uuid: randomUUID(),
-    timestamp: now,
-    sessionId,
-    cwd,
-    parentUuid: boundary.uuid,
-  }
-
-  const lines = [
-    JSON.stringify(boundary),
-    JSON.stringify(summary),
+  const drafts: SessionEventDraft[] = [
+    {
+      type: 'compact_boundary',
+      subtype: 'compact_boundary',
+      uuid: boundaryUuid,
+      parentUuid: null,
+      compactMetadata: { trigger, preTokens, postTokens },
+    },
+    {
+      type: 'user',
+      message: { role: 'user', content: summaryText },
+      uuid: summaryUuid,
+      parentUuid: boundaryUuid,
+    },
   ]
-  let parentUuid = summary.uuid
+
+  let parentUuid: string | null = summaryUuid
   for (const message of retainedMessages) {
-    const line = wrapEvent(message, sessionId, cwd, parentUuid)
-    const parsed = JSON.parse(line) as SessionEvent
-    parentUuid = parsed.uuid
-    lines.push(line)
+    const event = buildMessageEvent(message, sessionId, cwd, parentUuid)
+    parentUuid = event.uuid
+    drafts.push(event)
   }
 
-  await appendFile(filePath, lines.join('\n') + '\n', 'utf8')
+  await appendSessionEvents(cwd, sessionId, drafts)
 }
 
 export async function loadSession(
@@ -370,33 +446,8 @@ export async function loadSession(
   sessionId: string,
 ): Promise<ChatMessage[] | null> {
   try {
-    const content = await readFile(sessionFilePath(cwd, sessionId), 'utf8')
-    const lines = content.trim().split('\n').filter(Boolean)
-
-    // Find last compact_boundary
-    let lastBoundaryIndex = -1
-    for (let i = lines.length - 1; i >= 0; i--) {
-      const event = parseEvent(lines[i]!)
-      if (event?.type === 'compact_boundary') {
-        lastBoundaryIndex = i
-        break
-      }
-    }
-
-    const startLine = lastBoundaryIndex >= 0 ? lastBoundaryIndex + 1 : 0
-    const activeEvents: SessionEvent[] = []
-    for (let i = startLine; i < lines.length; i++) {
-      const event = parseEvent(lines[i]!)
-      if (event) activeEvents.push(event)
-    }
-
-    const messages: ChatMessage[] = []
-    for (const event of reconstructSnippedEvents(activeEvents)) {
-      const msg = unwrapMessage(event)
-      if (msg) messages.push(msg)
-    }
-
-    return messages.length > 0 ? messages : null
+    const snapshot = await readActiveSessionSnapshot(cwd, sessionId)
+    return snapshot?.messages ?? null
   } catch {
     return null
   }
@@ -407,31 +458,49 @@ export async function loadContextCollapseState(
   sessionId: string,
 ): Promise<ContextCollapseState | null> {
   try {
-    const content = await readFile(sessionFilePath(cwd, sessionId), 'utf8')
-    const lines = content.trim().split('\n').filter(Boolean)
+    const snapshot = await readActiveSessionSnapshot(cwd, sessionId)
+    return snapshot?.contextCollapseState ?? null
+  } catch {
+    return null
+  }
+}
 
-    let lastBoundaryIndex = -1
-    for (let i = lines.length - 1; i >= 0; i--) {
-      const event = parseEvent(lines[i]!)
-      if (event?.type === 'compact_boundary') {
-        lastBoundaryIndex = i
-        break
-      }
+export type SessionRuntimeState = {
+  messages: ChatMessage[] | null
+  contentReplacementState: ContentReplacementState | null
+  contextCollapseState: ContextCollapseState | null
+}
+
+export async function loadSessionRuntimeState(
+  cwd: string,
+  sessionId: string,
+): Promise<SessionRuntimeState | null> {
+  try {
+    const snapshot = await readActiveSessionSnapshot(cwd, sessionId)
+    if (!snapshot?.messages) return null
+    return {
+      messages: snapshot.messages,
+      contentReplacementState: reconstructContentReplacementState(snapshot.messages, { cwd, sessionId }),
+      contextCollapseState: snapshot.contextCollapseState,
+    }
+  } catch {
+    return null
+  }
+}
+
+export async function loadContentReplacementState(
+  cwd: string,
+  sessionId: string,
+  loadedMessages?: ChatMessage[],
+): Promise<ContentReplacementState | null> {
+  try {
+    if (loadedMessages) {
+      return reconstructContentReplacementState(loadedMessages, { cwd, sessionId })
     }
 
-    const state = createContextCollapseState()
-    for (let i = lastBoundaryIndex + 1; i < lines.length; i++) {
-      const event = parseEvent(lines[i]!)
-      if (event?.type !== 'context_collapse' || !event.contextCollapseSpan) {
-        continue
-      }
-      if (event.contextCollapseSpan.status !== 'committed') {
-        continue
-      }
-      state.spans.push(event.contextCollapseSpan)
-    }
-
-    return state.spans.length > 0 ? state : null
+    const snapshot = await readActiveSessionSnapshot(cwd, sessionId)
+    if (!snapshot?.messages) return null
+    return reconstructContentReplacementState(snapshot.messages, { cwd, sessionId })
   } catch {
     return null
   }
@@ -443,6 +512,12 @@ export async function clearSession(
 ): Promise<void> {
   try {
     await unlink(sessionFilePath(cwd, sessionId))
+  } catch {
+    // ignore
+  }
+
+  try {
+    await rm(sessionArtifactsDir(cwd, sessionId), { recursive: true, force: true })
   } catch {
     // ignore
   }
@@ -520,8 +595,8 @@ export async function renameSession(
     sessionId,
     cwd,
   })
-  await mkdir(projectDir(cwd), { recursive: true })
-  await appendFile(sessionFilePath(cwd, sessionId), event + '\n', 'utf8')
+  const filePath = await ensureSessionDir(cwd, sessionId)
+  await appendFile(filePath, event + '\n', 'utf8')
   return true
 }
 
@@ -569,10 +644,12 @@ export async function cleanupExpiredSessions(
   let removed = 0
   for (const name of entries.filter(e => e.endsWith('.jsonl'))) {
     const filePath = path.join(dir, name)
+    const sessionId = name.slice(0, -'.jsonl'.length)
     try {
       const stats = await stat(filePath)
       if (now - stats.mtime.getTime() > maxAgeMs) {
         await unlink(filePath)
+        await rm(sessionArtifactsDir(cwd, sessionId), { recursive: true, force: true })
         removed += 1
       }
     } catch {
@@ -648,12 +725,15 @@ export async function loadTranscript(
   sessionId: string,
 ): Promise<PersistedTranscriptEntry[] | null> {
   try {
-    const content = await readFile(sessionFilePath(cwd, sessionId), 'utf8')
-    const lines = content.trim().split('\n').filter(Boolean)
+    // Transcript shows full history (including pre-compact events), so we read
+    // all lines rather than just the active post-boundary segment.
+    const allLines = await readSessionLines(cwd, sessionId)
+    if (!allLines) return null
+
     const entries: PersistedTranscriptEntry[] = []
 
     const events = reconstructSnippedEvents(
-      lines
+      allLines
         .map(line => parseEvent(line))
         .filter((event): event is SessionEvent => Boolean(event)),
     )
@@ -704,5 +784,37 @@ export async function loadTranscript(
     return entries.length > 0 ? entries : null
   } catch {
     return null
+  }
+}
+
+type ActiveSessionSnapshot = {
+  messages: ChatMessage[] | null
+  contextCollapseState: ContextCollapseState | null
+}
+
+async function readActiveSessionSnapshot(
+  cwd: string,
+  sessionId: string,
+): Promise<ActiveSessionSnapshot | null> {
+  const lines = await readSessionLines(cwd, sessionId)
+  if (!lines) return null
+
+  const activeEvents = activeEventsFromLines(lines)
+  const messages: ChatMessage[] = []
+  for (const event of reconstructSnippedEvents(activeEvents)) {
+    const msg = unwrapMessage(event)
+    if (msg) messages.push(msg)
+  }
+
+  const state = createContextCollapseState()
+  for (const event of activeEvents) {
+    if (event.type !== 'context_collapse' || !event.contextCollapseSpan) continue
+    if (event.contextCollapseSpan.status !== 'committed') continue
+    state.spans.push(event.contextCollapseSpan)
+  }
+
+  return {
+    messages: messages.length > 0 ? messages : null,
+    contextCollapseState: state.spans.length > 0 ? state : null,
   }
 }

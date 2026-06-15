@@ -26,6 +26,7 @@ export const grepFilesTool: ToolDefinition<Input> = {
     pattern: z.string().min(1),
     path: z.string().optional(),
   }),
+  maxResultSizeChars: 20_000,
   async run(input, context) {
     const args = ['-n', '--no-heading', input.pattern]
     if (input.path) {
