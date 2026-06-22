@@ -226,7 +226,7 @@ export async function tryHandleLocalCommand(
   if (input === '/mcp') {
     const servers = context?.tools?.getMcpServers() ?? []
     if (servers.length === 0) {
-      return 'No MCP servers configured. Add mcpServers to ~/.mini-code/settings.json, ~/.mini-code/mcp.json, or project .mcp.json.'
+      return 'No MCP servers configured. Add mcpServers to ~/.mini-code/settings.json or ~/.mini-code/mcp.json. Project .mcp.json is loaded only when MINI_CODE_TRUST_PROJECT_MCP=1.'
     }
 
     return servers
