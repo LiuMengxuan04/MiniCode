@@ -71,4 +71,54 @@ describe('renderContextBadge', () => {
     assert.equal(filledCount, 5, `expected 5 filled blocks, got ${filledCount}`)
     assert.equal(emptyCount, 5, `expected 5 empty blocks, got ${emptyCount}`)
   })
+
+  it('shows remaining headroom when effectiveInput and totalTokens are provided', () => {
+    const result = renderContextBadge({
+      utilization: 0.4,
+      warningLevel: 'normal',
+      effectiveInput: 20_000,
+      totalTokens: 8_000,
+    })
+    const plain = stripAnsi(result)
+    assert.ok(plain.includes('12.0k left'), `expected headroom in: ${plain}`)
+  })
+
+  it('shows raw token count for small headroom', () => {
+    const result = renderContextBadge({
+      utilization: 0.95,
+      warningLevel: 'critical',
+      effectiveInput: 20_000,
+      totalTokens: 19_500,
+    })
+    const plain = stripAnsi(result)
+    assert.ok(plain.includes('500 left'), `expected headroom in: ${plain}`)
+  })
+
+  it('shows zero headroom when context is exhausted', () => {
+    const result = renderContextBadge({
+      utilization: 1,
+      warningLevel: 'blocked',
+      effectiveInput: 10_000,
+      totalTokens: 10_000,
+    })
+    const plain = stripAnsi(result)
+    assert.ok(plain.includes('0 left'), `expected headroom in: ${plain}`)
+  })
+
+  it('does not show headroom when token counts are missing', () => {
+    const result = renderContextBadge({ utilization: 0.4, warningLevel: 'normal' })
+    const plain = stripAnsi(result)
+    assert.ok(!plain.includes('left'))
+  })
+
+  it('clamps negative headroom to zero', () => {
+    const result = renderContextBadge({
+      utilization: 1.05,
+      warningLevel: 'blocked',
+      effectiveInput: 10_000,
+      totalTokens: 12_000,
+    })
+    const plain = stripAnsi(result)
+    assert.ok(plain.includes('0 left'), `expected clamped headroom in: ${plain}`)
+  })
 })

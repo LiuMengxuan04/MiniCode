@@ -211,9 +211,17 @@ export function renderPanel(
   ].join('\n')
 }
 
+function formatTokens(value: number): string {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}m`
+  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}k`
+  return String(Math.round(value))
+}
+
 export function renderContextBadge(stats: {
   utilization: number
   warningLevel: 'normal' | 'warning' | 'critical' | 'blocked'
+  effectiveInput?: number
+  totalTokens?: number
   accounting?: {
     providerUsageTokens: number
     estimatedTokens: number
@@ -231,7 +239,7 @@ export function renderContextBadge(stats: {
   }
   const color = colorMap[warningLevel]
 
-  const filled = Math.round(utilization * 10)
+  const filled = Math.min(10, Math.max(0, Math.round(utilization * 10)))
   const bar = '\u2593'.repeat(filled) + '\u2591'.repeat(10 - filled)
   const sourceLabel =
     accounting?.source === 'provider_usage'
@@ -241,7 +249,12 @@ export function renderContextBadge(stats: {
         : accounting?.source === 'estimate_only'
           ? 'est'
           : ''
-  const suffix = sourceLabel ? ` ${sourceLabel}` : ''
+  let suffix = sourceLabel ? ` ${sourceLabel}` : ''
+
+  if (stats.effectiveInput !== undefined && stats.totalTokens !== undefined) {
+    const headroom = Math.max(0, stats.effectiveInput - stats.totalTokens)
+    suffix += ` ${formatTokens(headroom)} left`
+  }
 
   return colorBadge('ctx', `${percent}% ${bar}${suffix}`, color)
 }
@@ -261,6 +274,8 @@ export function renderBanner(
     contextStats?: {
       utilization: number
       warningLevel: 'normal' | 'warning' | 'critical' | 'blocked'
+      effectiveInput?: number
+      totalTokens?: number
       accounting?: {
         providerUsageTokens: number
         estimatedTokens: number
