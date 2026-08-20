@@ -20,6 +20,7 @@ import {
   snipCompactConversation,
   type SnipCompactResult,
 } from './compact/snipCompact.js'
+import { requestWithPromptTooLongRecovery } from './prompt-too-long.js'
 import { computeContextStats } from './utils/token-estimator.js'
 import {
   applyToolResultBudget,
@@ -238,10 +239,31 @@ export async function runAgentTurn(args: {
       }
     }
 
-    const next = await args.model.next(modelMessages, {
-      tools: args.tools.list(),
-      signal: args.signal,
+    const requestResult = await requestWithPromptTooLongRecovery({
+      model: args.model,
+      modelName,
+      messages: modelMessages,
+      options: {
+        tools: args.tools.list(),
+        signal: args.signal,
+      },
+      onCompacted: async (compacted) => {
+        messages = compacted.messages
+        modelMessages = compacted.messages
+        snippedThisTurn = true
+        await args.onSnipCompact?.(compacted)
+        const stats = computeContextStats(compacted.messages, modelName)
+        args.onContextStats?.(stats)
+      },
     })
+    const next = requestResult.step
+
+    if (requestResult.messages !== modelMessages) {
+      modelMessages = requestResult.messages
+      messages = requestResult.messages
+      latestStats = computeContextStats(messages, modelName)
+      args.onContextStats?.(latestStats)
+    }
 
     if (next.type === 'assistant') {
       const isEmpty = isEmptyAssistantResponse(next.content)
