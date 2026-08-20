@@ -200,12 +200,26 @@ export async function saveMiniCodeSettings(
   )
 }
 
+/**
+ * Merge process environment variables with env entries from settings files.
+ *
+ * Priority follows the documented configuration precedence (USAGE.md):
+ * `~/.mini-code/settings.json` env entries take precedence over process
+ * environment variables.
+ */
+export function mergeEnv(
+  settingsEnv: MiniCodeSettings['env'] | undefined,
+  processEnv: NodeJS.ProcessEnv,
+): Record<string, string | number | undefined> {
+  return {
+    ...processEnv,
+    ...(settingsEnv ?? {}),
+  }
+}
+
 export async function loadRuntimeConfig(): Promise<RuntimeConfig> {
   const effectiveSettings = await loadEffectiveSettings()
-  const env = {
-    ...(effectiveSettings.env ?? {}),
-    ...process.env,
-  }
+  const env = mergeEnv(effectiveSettings.env, process.env)
 
   const model =
     process.env.MINI_CODE_MODEL ||
