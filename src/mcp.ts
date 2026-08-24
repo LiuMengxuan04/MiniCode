@@ -146,7 +146,24 @@ function formatContentBlock(block: unknown): string {
   return JSON.stringify(block, null, 2)
 }
 
-function formatToolCallResult(result: unknown): ToolResult {
+function isParallelSearchMcpEndpoint(url: string | undefined): boolean {
+  if (!url?.trim()) return false
+
+  try {
+    const endpoint = new URL(url)
+    return (
+      endpoint.origin === 'https://search.parallel.ai' &&
+      endpoint.pathname.replace(/\/+$/, '') === '/mcp'
+    )
+  } catch {
+    return false
+  }
+}
+
+function formatToolCallResult(
+  result: unknown,
+  preferStructuredContent = false,
+): ToolResult {
   if (!result || typeof result !== 'object') {
     return {
       ok: true,
@@ -162,14 +179,18 @@ function formatToolCallResult(result: unknown): ToolResult {
 
   const parts: string[] = []
 
-  if (Array.isArray(typedResult.content) && typedResult.content.length > 0) {
-    parts.push(typedResult.content.map(formatContentBlock).join('\n\n'))
-  }
+  if (preferStructuredContent && typedResult.structuredContent !== undefined) {
+    parts.push(JSON.stringify(typedResult.structuredContent, null, 2))
+  } else {
+    if (Array.isArray(typedResult.content) && typedResult.content.length > 0) {
+      parts.push(typedResult.content.map(formatContentBlock).join('\n\n'))
+    }
 
-  if (typedResult.structuredContent !== undefined) {
-    parts.push(
-      `STRUCTURED_CONTENT:\n${JSON.stringify(typedResult.structuredContent, null, 2)}`,
-    )
+    if (typedResult.structuredContent !== undefined) {
+      parts.push(
+        `STRUCTURED_CONTENT:\n${JSON.stringify(typedResult.structuredContent, null, 2)}`,
+      )
+    }
   }
 
   if (parts.length === 0) {
@@ -867,7 +888,10 @@ class StreamableHttpMcpClient {
       name,
       arguments: input ?? {},
     })
-    return formatToolCallResult(result)
+    return formatToolCallResult(
+      result,
+      isParallelSearchMcpEndpoint(this.config.url),
+    )
   }
 
   async close(): Promise<void> {

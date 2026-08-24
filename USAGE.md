@@ -289,6 +289,29 @@ For vendor compatibility, MiniCode now auto-negotiates stdio framing:
 - for remote MCP over HTTP, use `"protocol": "streamable-http"` with `"url"` (and optional `"headers"`)
 - header values support environment interpolation, e.g. `"Authorization": "Bearer $MCP_TOKEN"`
 
+To opt in to Parallel's hosted web search and URL fetching, add this server to
+`~/.mini-code/mcp.json` or the current project's `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "parallel-search": {
+      "protocol": "streamable-http",
+      "url": "https://search.parallel.ai/mcp"
+    }
+  }
+}
+```
+
+The endpoint works without an account or API key and advertises both
+`web_search` and `web_fetch`. MiniCode exposes them through its normal MCP tool
+wrapping as `mcp__parallel-search__web_search` and
+`mcp__parallel-search__web_fetch`; it does not replace the built-in web tools or
+select Parallel by default. When you explicitly configure this server and use
+its tools, user-provided search objectives and search queries are sent to
+Parallel for searches, and user-requested page URLs are sent to Parallel when
+`web_fetch` is invoked. See the [Parallel Search MCP documentation](https://docs.parallel.ai/integrations/mcp/search-mcp).
+
 Remote MCP authentication strategy (lightweight by design):
 
 - use `minicode mcp login <name> --token <bearer-token>` to store a bearer token locally
