@@ -164,7 +164,6 @@ export class PermissionManager {
   private readonly sessionDeniedCommands = new Set<string>()
   private readonly allowedEditPatterns = new Set<string>()
   private readonly deniedEditPatterns = new Set<string>()
-  private readonly sessionAllowedEdits = new Set<string>()
   private readonly sessionDeniedEdits = new Set<string>()
   private readonly turnAllowedEdits = new Set<string>()
   private turnAllowAllEdits = false
@@ -419,7 +418,6 @@ export class PermissionManager {
     }
 
     if (
-      this.sessionAllowedEdits.has(normalizedTarget) ||
       this.turnAllowedEdits.has(normalizedTarget) ||
       this.turnAllowAllEdits ||
       this.allowedEditPatterns.has(normalizedTarget)
@@ -454,7 +452,6 @@ export class PermissionManager {
     })
 
     if (promptResult.decision === 'allow_once') {
-      this.sessionAllowedEdits.add(normalizedTarget)
       return
     }
 
@@ -488,8 +485,6 @@ export class PermissionManager {
     if (promptResult.decision === 'deny_always') {
       this.deniedEditPatterns.add(normalizedTarget)
       await this.persist()
-    } else {
-      this.sessionDeniedEdits.add(normalizedTarget)
     }
 
     throw new Error(`Edit denied: ${normalizedTarget}`)
