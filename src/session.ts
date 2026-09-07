@@ -179,6 +179,7 @@ function extractTitleFromEvents(lines: string[]): string | undefined {
   for (const line of lines) {
     const event = parseEvent(line)
     if (!event || event.type !== 'user') continue
+    if ((event.message as { internal?: string } | null)?.internal) continue
     const content = (event.message as { content?: unknown } | null)?.content
     if (typeof content !== 'string' || !content.trim()) continue
     const text = content.trim()
@@ -651,6 +652,7 @@ export async function loadTranscript(
     const content = await readFile(sessionFilePath(cwd, sessionId), 'utf8')
     const lines = content.trim().split('\n').filter(Boolean)
     const entries: PersistedTranscriptEntry[] = []
+    const toolEntries = new Map<string, Extract<PersistedTranscriptEntry, { kind: 'tool' }>>()
 
     const events = reconstructSnippedEvents(
       lines
@@ -664,6 +666,7 @@ export async function loadTranscript(
 
       switch (event.type) {
         case 'user':
+          if (msg.internal) break
           entries.push({ kind: 'user', body: typeof msg.content === 'string' ? msg.content : '' })
           break
         case 'assistant':
@@ -672,14 +675,25 @@ export async function loadTranscript(
         case 'progress':
           entries.push({ kind: 'progress', body: typeof msg.content === 'string' ? msg.content : '' })
           break
-        case 'tool_call':
-          entries.push({
+        case 'tool_call': {
+          const entry: Extract<PersistedTranscriptEntry, { kind: 'tool' }> = {
             kind: 'tool',
             toolName: typeof msg.toolName === 'string' ? msg.toolName : 'unknown',
-            status: 'success',
-            body: JSON.stringify(msg.input ?? ''),
-          })
+            status: 'error',
+            body: 'No saved result for this tool call.',
+          }
+          entries.push(entry)
+          if (typeof msg.toolUseId === 'string') toolEntries.set(msg.toolUseId, entry)
           break
+        }
+        case 'tool_result': {
+          const entry = typeof msg.toolUseId === 'string' ? toolEntries.get(msg.toolUseId) : undefined
+          if (entry) {
+            entry.status = msg.isError ? 'error' : 'success'
+            entry.body = typeof msg.content === 'string' ? msg.content : ''
+          }
+          break
+        }
         case 'summary':
           entries.push({
             kind: 'assistant',

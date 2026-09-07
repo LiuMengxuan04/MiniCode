@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { MINI_CODE_DIR } from './config.js'
+import { abortable, throwIfAborted } from './abort.js'
 import { isEnoentError } from './utils/errors.js'
 
 export type PermissionDecision =
@@ -37,6 +38,7 @@ export type PermissionRequest = {
 
 export type PermissionPromptHandler = (
   request: PermissionRequest,
+  signal?: AbortSignal,
 ) => Promise<PermissionPromptResult>
 
 type PermissionStore = {
@@ -169,6 +171,7 @@ export class PermissionManager {
   private readonly turnAllowedEdits = new Set<string>()
   private turnAllowAllEdits = false
   private ready: Promise<void>
+  private signal?: AbortSignal
 
   constructor(
     private readonly workspaceRoot: string,
@@ -207,14 +210,17 @@ export class PermissionManager {
 
   async whenReady(): Promise<void> {
     await this.ready
+    throwIfAborted(this.signal)
   }
 
-  beginTurn(): void {
+  beginTurn(signal?: AbortSignal): void {
+    this.signal = signal
     this.turnAllowedEdits.clear()
     this.turnAllowAllEdits = false
   }
 
   endTurn(): void {
+    this.signal = undefined
     this.turnAllowedEdits.clear()
     this.turnAllowAllEdits = false
   }
@@ -247,6 +253,14 @@ export class PermissionManager {
     return summary
   }
 
+  private async requestApproval(request: PermissionRequest): Promise<PermissionPromptResult> {
+    const signal = this.signal
+    throwIfAborted(signal)
+    const result = await abortable(this.prompt!(request, signal), signal)
+    throwIfAborted(signal)
+    return result
+  }
+
   private async persist(): Promise<void> {
     await writePermissionStore({
       allowedDirectoryPrefixes: [...this.allowedDirectoryPrefixes],
@@ -260,6 +274,7 @@ export class PermissionManager {
 
   async ensurePathAccess(targetPath: string, intent: PathIntent): Promise<void> {
     await this.ready
+    throwIfAborted(this.signal)
 
     const normalizedTarget = normalizePath(targetPath)
     if (isWithinDirectory(this.workspaceRoot, normalizedTarget)) {
@@ -291,7 +306,7 @@ export class PermissionManager {
         ? normalizedTarget
         : path.dirname(normalizedTarget)
 
-    const promptResult = await this.prompt({
+    const promptResult = await this.requestApproval({
       kind: 'path',
       summary: `mini-code wants ${intent.replace('_', ' ')} access outside the current cwd`,
       details: [
@@ -316,6 +331,7 @@ export class PermissionManager {
     if (promptResult.decision === 'allow_always') {
       this.allowedDirectoryPrefixes.add(scopeDirectory)
       await this.persist()
+      throwIfAborted(this.signal)
       return
     }
 
@@ -336,6 +352,7 @@ export class PermissionManager {
     options?: EnsureCommandOptions,
   ): Promise<void> {
     await this.ready
+    throwIfAborted(this.signal)
 
     await this.ensurePathAccess(commandCwd, 'command_cwd')
 
@@ -366,7 +383,7 @@ export class PermissionManager {
       )
     }
 
-    const promptResult = await this.prompt({
+    const promptResult = await this.requestApproval({
       kind: 'command',
       summary: options?.forcePromptReason
         ? 'mini-code wants approval for this command'
@@ -393,6 +410,7 @@ export class PermissionManager {
     if (promptResult.decision === 'allow_always') {
       this.allowedCommandPatterns.add(signature)
       await this.persist()
+      throwIfAborted(this.signal)
       return
     }
 
@@ -408,6 +426,7 @@ export class PermissionManager {
 
   async ensureEdit(targetPath: string, diffPreview: string): Promise<void> {
     await this.ready
+    throwIfAborted(this.signal)
 
     const normalizedTarget = normalizePath(targetPath)
 
@@ -433,7 +452,7 @@ export class PermissionManager {
       )
     }
 
-    const promptResult = await this.prompt({
+    const promptResult = await this.requestApproval({
       kind: 'edit',
       summary: 'mini-code wants to apply a file modification',
       details: [
@@ -471,6 +490,7 @@ export class PermissionManager {
     if (promptResult.decision === 'allow_always') {
       this.allowedEditPatterns.add(normalizedTarget)
       await this.persist()
+      throwIfAborted(this.signal)
       return
     }
 

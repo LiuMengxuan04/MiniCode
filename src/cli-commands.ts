@@ -9,6 +9,8 @@ import {
 import { initializeRepo, renderInitReport } from './init.js'
 import { discoverInstructionFiles, renderMemoryReport } from './memory.js'
 import type { ToolRegistry } from './tool.js'
+import type { PlanManager } from './plan/manager.js'
+import { formatPlan } from './plan/context.js'
 
 export type SlashCommand = {
   name: string
@@ -17,6 +19,20 @@ export type SlashCommand = {
 }
 
 export const SLASH_COMMANDS: SlashCommand[] = [
+  { name: '/loop', usage: '/loop', description: 'Show the current in-memory Loop.' },
+  { name: '/loop', usage: '/loop [Nm|Nh] <prompt>', description: 'Repeat a prompt after each interval; default 10m, minimum 1m.' },
+  { name: '/loop', usage: '/loop stop', description: 'Stop the Loop, including during a turn or approval.' },
+  { name: '/goal', usage: '/goal', description: 'Show the current in-memory Goal, criteria, status and Plan.' },
+  { name: '/goal', usage: '/goal <description>', description: 'Create a Goal and start automatic turns.' },
+  { name: '/goal', usage: '/goal status', description: 'Show Goal status.' },
+  { name: '/goal', usage: '/goal pause [reason]', description: 'Pause the Goal, including during a turn or approval.' },
+  { name: '/goal', usage: '/goal resume', description: 'Explicitly resume a paused or blocked Goal.' },
+  { name: '/goal', usage: '/goal clear', description: 'Stop and clear the Goal; retain the Plan.' },
+  {
+    name: '/plan',
+    usage: '/plan',
+    description: 'Show the current in-memory Todo list.',
+  },
   {
     name: '/help',
     usage: '/help',
@@ -184,9 +200,18 @@ export async function tryHandleLocalCommand(
     cwd?: string
     tools?: ToolRegistry
     permissionSummary?: string[]
+    plan?: PlanManager
   },
 ): Promise<string | null> {
   const cwd = context?.cwd ?? process.cwd()
+
+  if (input === '/plan') {
+    return context?.plan ? formatPlan(context.plan.getSnapshot()) : 'Plan is empty.'
+  }
+
+  if (input.startsWith('/plan ')) {
+    return 'Usage: /plan (view only). Ask the agent to update the Todo list with update_plan.'
+  }
 
   if (input === '/') {
     return formatSlashCommands()

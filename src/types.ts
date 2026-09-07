@@ -22,7 +22,7 @@ export type MessageIdentity = {
 
 export type ChatMessage =
   | ({ role: 'system'; content: string } & MessageIdentity)
-  | ({ role: 'user'; content: string } & MessageIdentity)
+  | ({ role: 'user'; content: string; internal?: 'goal' | 'loop' | 'continuation' } & MessageIdentity)
   | ({ role: 'assistant_thinking'; blocks: ProviderThinkingBlock[] } & MessageIdentity)
   | ({ role: 'assistant'; content: string } & ProviderUsageMetadata & MessageIdentity)
   | ({ role: 'assistant_progress'; content: string } & ProviderUsageMetadata & MessageIdentity)
@@ -58,6 +58,15 @@ export type ToolCall = {
   id: string
   toolName: string
   input: unknown
+}
+
+export type AgentTurnOutcome = 'final' | 'awaiting_user' | 'aborted' | 'max_steps' | 'failed' | 'controlled_stop'
+
+export type AgentTurnResult = {
+  messages: ChatMessage[]
+  outcome: AgentTurnOutcome
+  toolCalls: number
+  error?: string
 }
 
 export type StepDiagnostics = {

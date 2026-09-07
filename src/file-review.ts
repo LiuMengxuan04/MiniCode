@@ -1,3 +1,4 @@
+import { throwIfAborted } from './abort.js'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { createTwoFilesPatch } from 'diff'
@@ -50,6 +51,7 @@ export async function applyReviewedFileChange(
   nextContent: string,
 ): Promise<ToolResult> {
   const previousContent = await loadExistingFile(targetPath)
+  throwIfAborted(context.signal)
   if (previousContent === nextContent) {
     return {
       ok: true,
@@ -60,7 +62,9 @@ export async function applyReviewedFileChange(
   const diff = buildUnifiedDiff(filePath, previousContent, nextContent)
   await context.permissions?.ensureEdit(targetPath, diff)
 
+  throwIfAborted(context.signal)
   await mkdir(path.dirname(targetPath), { recursive: true })
+  throwIfAborted(context.signal)
   await writeFile(targetPath, nextContent, 'utf8')
 
   return {

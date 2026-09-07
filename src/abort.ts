@@ -10,6 +10,24 @@ export function throwIfAborted(signal?: AbortSignal): void {
   }
 }
 
+/** Stop waiting for a model/approval even when its adapter ignores the signal. */
+export async function abortable<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return promise
+  let cancel: (() => void) | undefined
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_resolve, reject) => {
+        cancel = () => reject(abortError(signal))
+        if (signal.aborted) cancel()
+        else signal.addEventListener('abort', cancel, { once: true })
+      }),
+    ])
+  } finally {
+    if (cancel) signal.removeEventListener('abort', cancel)
+  }
+}
+
 export function abortableDelay(
   milliseconds: number,
   signal?: AbortSignal,

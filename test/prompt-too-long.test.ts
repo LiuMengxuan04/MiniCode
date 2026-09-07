@@ -3,7 +3,8 @@ import assert from 'node:assert/strict'
 import type { AgentStep, ChatMessage, ModelAdapter } from '../src/types.js'
 import { ModelRequestError } from '../src/utils/errors.js'
 import { requestWithPromptTooLongRecovery } from '../src/prompt-too-long.js'
-import { runAgentTurn } from '../src/agent-loop.js'
+import { runAgentTurn, runAgentTurnWithOutcome } from '../src/agent-loop.js'
+import { PlanManager } from '../src/plan/manager.js'
 import { ToolRegistry } from '../src/tool.js'
 import type { PermissionManager } from '../src/permissions.js'
 
@@ -159,6 +160,57 @@ describe('requestWithPromptTooLongRecovery', () => {
 
     assert.equal(calls, 3)
     assert.equal(persistedSnips, 1)
+  })
+
+  it('keeps current plan and runtime context on retries without persisting them', async () => {
+    const plan = new PlanManager('recovery-test')
+    const initial = plan.update([{ title: 'First plan', status: 'pending' }])
+    let calls = 0
+    const result = await runAgentTurnWithOutcome({
+      model: {
+        async next(request) {
+          calls += 1
+          const system = request.find(message => message.role === 'system')
+          assert.ok(system?.role === 'system')
+          assert.ok(system.content.includes(`runtime-${calls}`))
+          assert.ok(system.content.includes(calls === 1 ? 'First plan' : 'Updated plan'))
+          if (calls === 1) {
+            plan.update([{ id: initial.todos[0]!.id, title: 'Updated plan', status: 'in_progress' }])
+            throw new ModelRequestError('prompt is too long', 400)
+          }
+          return { type: 'assistant', content: 'done', kind: 'final' }
+        },
+      },
+      tools: new ToolRegistry([]), messages, cwd: process.cwd(), plan,
+      runtimeContext: () => `runtime-${calls + 1}`,
+      onSnipCompact(snip) {
+        assert.deepEqual(snip.messages.filter(message => message.role === 'system'), [messages[0]])
+      },
+    })
+    assert.equal(calls, 2)
+    assert.equal(result.outcome, 'final')
+    assert.deepEqual(result.messages.filter(message => message.role === 'system'), [messages[0]])
+  })
+
+  it('aborts a recovered request even when the adapter ignores the signal', async () => {
+    const controller = new AbortController()
+    let calls = 0
+    const result = await runAgentTurnWithOutcome({
+      model: {
+        async next() {
+          calls += 1
+          if (calls === 1) throw new ModelRequestError('prompt is too long', 400)
+          queueMicrotask(() => controller.abort(new Error('user cancelled')))
+          return new Promise<AgentStep>(() => {})
+        },
+      },
+      tools: new ToolRegistry([]), messages, cwd: process.cwd(),
+      signal: controller.signal,
+    })
+    assert.equal(calls, 2)
+    assert.equal(result.outcome, 'aborted')
+    assert.equal(result.error, 'user cancelled')
+    assert.ok(result.messages.length < messages.length)
   })
 
   it('rethrows non-prompt-too-long errors without retrying', async () => {

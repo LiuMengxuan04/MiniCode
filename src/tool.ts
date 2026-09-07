@@ -2,10 +2,12 @@ import { z } from 'zod'
 import type { PermissionManager } from './permissions.js'
 import type { SkillSummary } from './skills.js'
 import type { McpServerSummary } from './mcp.js'
+import { throwIfAborted } from './abort.js'
 
 export type ToolContext = {
   cwd: string
   permissions?: PermissionManager
+  signal?: AbortSignal
 }
 
 export type BackgroundTaskResult = {
@@ -22,6 +24,8 @@ export type ToolResult = {
   output: string
   backgroundTask?: BackgroundTaskResult
   awaitUser?: boolean
+  stop?: boolean
+  fatal?: boolean
 }
 
 export type ToolDefinition<TInput> = {
@@ -121,11 +125,13 @@ export class ToolRegistry {
     }
 
     try {
+      throwIfAborted(context.signal)
       return await tool.run(parsed.data, context)
     } catch (error) {
       return {
         ok: false,
         output: error instanceof Error ? error.message : String(error),
+        fatal: true,
       }
     }
   }

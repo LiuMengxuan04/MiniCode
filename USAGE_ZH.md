@@ -46,6 +46,7 @@
 - `web_fetch`
 - `web_search`
 - `ask_user`
+- `update_plan`（仅 root agent）
 - `load_skill`
 - `list_mcp_resources`
 - `read_mcp_resource`
@@ -162,6 +163,7 @@ MINI_CODE_MODEL_MODE=mock npm run dev
 
 - `/help`
 - `/tools`
+- `/plan`
 - `/skills`
 - `/mcp`
 - `/status`
@@ -170,6 +172,20 @@ MINI_CODE_MODEL_MODE=mock npm run dev
 - `/model`
 - `/model <name>`
 - `/config-paths`
+
+### Plan / Todo（内存最简版）
+
+可以要求 Agent 为多步任务维护清单，例如：
+
+```text
+阅读搜索功能的实现，梳理测试覆盖情况，用 update_plan 跟踪步骤，暂不修改文件。
+```
+
+`update_plan` 接收完整 Todo 列表：已有条目携带工具返回的 ID，新条目省略 `id`。同一个工具支持新增、改名、删除、重排、完成和重开，可用可选的 `explanation` 简述调整原因。三种状态分别为 `pending`（`[ ]`）、`in_progress`（`[>]`，即 Active）和 `completed`（`[x]`）。最多一个条目为 Active；非法更新不会改变原清单。空列表用于清空，全部完成的清单仍保留展示。
+
+输入 `/plan` 即可查看，无需调用模型。更新成功后，TUI 的工具结果也会显示清单。每次 root 模型请求都会注入最新 Plan，压缩上下文后仍然有效；只读 sub-agent 不能修改 Plan。Plan 不调度执行，即使还有未完成项，普通 final 也会正常结束当前回合。
+
+本阶段只在内存中保留当前会话的 Plan。重启、`/new`、`/resume` 或 `/fork` 后清单为空；历史中的旧工具消息不用于恢复 Plan。`/compact` 与上下文投影不清空当前 Plan。手工编辑命令、Todo 选择交互和持久化留到下一阶段。
 
 ### 终端交互能力
 
@@ -489,3 +505,29 @@ npm test
 ```
 
 MiniCode 有意保持小而实用。目标是让整体架构足够清晰、易改造、易扩展。
+
+## Goal：跨回合推进目标
+
+输入 `/goal <目标描述>` 创建并启动一个进程内 Goal。`/goal` 或 `/goal status` 查看目标、完成标准、状态和共用 Plan。Agent 先通过 `update_plan` 准备非空计划，再用 `update_goal` 设置完成标准。普通 final 只结束一轮；Goal 仍为 active 时会继续下一轮。
+
+- `/goal pause [原因]` 暂停自动执行，在模型请求或审批等待期间也可用。已经开始的工具会收尾并保留结果，同批次剩余调用取消。
+- `/goal resume` 显式恢复暂停或阻塞的 Goal。若 `ask_user` 正等待回答，需要先作答；暂停时的回答只记录，不自动恢复。
+- `/goal clear` 停止并清除 Goal，保留 Plan 和工作区改动。创建新 Goal 前需先清除已有 Goal。
+- `get_goal`、`update_goal` 仅提供给 Goal 回合中的 root agent。Agent 不能创建目标、修改目标原文或自行恢复。
+- 完成需要：非空计划、所有 Todo 完成、非空标准、摘要，以及每条标准对应的检查说明。本阶段只做结构检查，不校验工具证据引用。成功提交 completed/blocked 后立即停止同批次后续调用。
+
+每轮最多 50 个模型/工具步骤；连续 3 个自动回合没有工具调用时暂停。模型错误、未处理的工具异常、会话保存失败也会停止自动执行。原有文件和命令审批规则继续生效。
+
+Goal 和 Plan 状态仅保留在当前进程。TUI 的 `/new`、`/resume`、`/fork` 会先停止执行并清除 Goal；重启不会自动恢复。非 TTY 输入也支持 Goal 命令，但不能处理交互审批，输入结束时停止执行。目标更新、持久化、证据引用检查和更完整的 UI 留到后续阶段。
+
+## Loop：重复触发提示词
+
+`/loop [Nm|Nh] <提示词>` 创建一个进程内重复任务，例如 `/loop 5m 检查测试输出，有变化时汇报`。省略间隔时为 10 分钟，最短 1 分钟，数值需在单个 JavaScript 定时器范围内。`/loop` 查看任务，`/loop stop` 停止并清除任务，保留 Plan。
+
+首次在会话空闲时执行；每轮成功 final、工具与会话保存收尾后，再等待完整间隔。到期时若普通回合或本地命令正忙，只保留一次待触发，空闲后执行一次，不累计补跑。两次触发之间可以正常聊天。
+
+Loop 复用同一 Agent 回合和可选 Plan，每轮最多 50 步，不注入 Goal 上下文，也不提供 Goal 工具。Goal/Loop 在启用、执行、停止收尾或等待回答期间互斥；切换模式前先暂停/清除 Goal 或停止 Loop。Goal 尚未回答的问题需要先回答或清除。
+
+`ask_user` 会暂停调度，直到真实回答到达。审批继续使用原有界面，审批等待期间也可输入 `/loop stop`。错误或步数上限会使 Loop 进入 paused。本阶段没有 pause/resume 命令和 `stop_loop` 工具，查看原因后可 stop 并重新创建。
+
+TUI 切换会话及进程退出会取消定时器和正在执行的回合，重启不恢复任务。停止 Loop 不回滚工作区改动，也不终止此前显式启动的独立后台命令。不支持 cron、daemon、多任务和补跑队列。

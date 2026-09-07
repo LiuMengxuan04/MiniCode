@@ -1,7 +1,10 @@
 import crypto from 'node:crypto'
 import process from 'node:process'
 import { listBackgroundTasks } from './background-tasks.js'
-import { runAgentTurn } from './agent-loop.js'
+import { SessionRuntime } from './runtime/session-runtime.js'
+import type { TurnRequest } from './runtime/turn-runner.js'
+import { throwIfAborted } from './abort.js'
+import { runAgentTurnWithOutcome } from './agent-loop.js'
 import {
   SLASH_COMMANDS,
   findMatchingSlashCommands,
@@ -16,6 +19,8 @@ import {
   PermissionRequest,
 } from './permissions.js'
 import { buildSystemPrompt } from './prompt.js'
+import type { PlanManager } from './plan/manager.js'
+import { formatPlan } from './plan/context.js'
 import { discoverInstructionFiles } from './memory.js'
 import {
   saveSession,
@@ -61,7 +66,7 @@ import {
 } from './ui.js'
 import type { RuntimeConfig } from './config.js'
 import type { ToolRegistry } from './tool.js'
-import type { ChatMessage, CompressionResult, ModelAdapter } from './types.js'
+import type { ChatMessage, CompressionResult, ModelAdapter, AgentTurnResult } from './types.js'
 import type { ContextStats } from './utils/token-estimator.js'
 import type { SubAgentManager } from './agents/manager.js'
 import { computeContextStats } from './utils/token-estimator.js'
@@ -83,6 +88,7 @@ type TtyAppArgs = {
   tools: ToolRegistry
   model: ModelAdapter
   subAgents: SubAgentManager
+  plan: PlanManager
   messages: ChatMessage[]
   cwd: string
   permissions: PermissionManager
@@ -91,6 +97,7 @@ type TtyAppArgs = {
   sessionId: string
   alreadySavedCount: number
   resumeTarget?: string | 'picker'
+  execution?: SessionRuntime
 }
 
 type PendingApproval = {
@@ -765,6 +772,7 @@ function renderScreen(args: TtyAppArgs, state: ScreenState): void {
       })),
     )
     frame.push('')
+    frame.push(`Control: ${state.input || '/goal pause, /loop stop, or /exit'}`)
     frame.push(renderPanel('activity', renderToolPanel(state.activeTool, state.recentTools, backgroundTasks)))
     frame.push('')
     frame.push(
@@ -972,6 +980,7 @@ async function resumeSession(
   loaded: ChatMessage[],
 ): Promise<void> {
   args.sessionId = sessionId
+  args.plan.reset(sessionId)
   const systemContent =
     args.messages[0]?.role === 'system' ? args.messages[0].content : ''
   await refreshSystemPrompt(args)
@@ -986,7 +995,7 @@ async function resumeSession(
     }
   } else {
     for (const msg of loaded) {
-      if (msg.role === 'user') {
+      if (msg.role === 'user' && !msg.internal) {
         pushTranscriptEntry(state, { kind: 'user', body: msg.content })
       } else if (msg.role === 'assistant') {
         pushTranscriptEntry(state, { kind: 'assistant', body: msg.content })
@@ -1027,19 +1036,32 @@ async function handleInput(
   rerender: () => void,
   submittedRawInput?: string,
 ): Promise<boolean> {
-  if (state.isBusy) {
-    setStatus(
-      state,
-      state.activeTool
-        ? `Running ${state.activeTool}...`
-        : 'Current turn is still running...',
-    )
-    return false
-  }
-
   const input = (submittedRawInput ?? state.input).trim()
   if (!input) return false
-  if (input === '/exit') return true
+  if (input === '/exit') {
+    await args.execution!.stop()
+    return true
+  }
+  if (input === '/plan') {
+    pushTranscriptEntry(state, { kind: 'assistant', body: formatPlan(args.plan.getSnapshot()) })
+    return false
+  }
+  const runtimeReply = await args.execution!.command(input)
+  if (runtimeReply !== null) {
+    pushTranscriptEntry(state, { kind: 'assistant', body: runtimeReply })
+    rerender()
+    return false
+  }
+  if (/^\/(new|resume|fork)(?:\s|$)/.test(input)) {
+    await args.execution!.reset()
+    // Retry saving before switching sessions; a failure leaves the current session intact.
+    await saveSession(args.cwd, args.sessionId, args.messages, args.alreadySavedCount)
+    args.alreadySavedCount = args.messages.length - 1
+  }
+  if (state.isBusy || args.execution!.turns.busy || args.execution!.goal.running || args.execution!.loop.running) {
+    setStatus(state, 'Current turn is still running. Use /goal pause, /loop stop, or /exit.')
+    return false
+  }
 
   // /collapse: persistent model-visible projection; original transcript remains intact
   if (input === '/collapse') {
@@ -1293,6 +1315,7 @@ async function handleInput(
 
   if (input === '/new') {
     args.sessionId = crypto.randomUUID().slice(0, 8)
+    args.plan.reset(args.sessionId)
     args.alreadySavedCount = 0
     args.contextCollapseState = createContextCollapseState()
     state.transcript = []
@@ -1316,6 +1339,7 @@ async function handleInput(
       return false
     }
     args.sessionId = newId
+    args.plan.reset(newId)
     args.alreadySavedCount = args.messages.length - 1
     args.contextCollapseState = createContextCollapseState()
     state.transcriptScrollOffset = 0
@@ -1347,6 +1371,7 @@ async function handleInput(
   const localCommandResult = await tryHandleLocalCommand(input, {
     cwd: args.cwd,
     tools: args.tools,
+    plan: args.plan,
     permissionSummary: args.permissions.getSummary(),
   })
   if (localCommandResult !== null) {
@@ -1381,28 +1406,46 @@ async function handleInput(
     return false
   }
 
-  await refreshSystemPrompt(args)
-  args.messages.push({ role: 'user', content: input })
-  pushTranscriptEntry(state, {
-    kind: 'user',
-    body: input,
-  })
-  state.transcriptScrollOffset = 0
-  startWelcomeEscapeAnimation(state)
-  setStatus(state, 'Thinking...')
+  await args.execution!.submit(input)
+  return false
+}
+
+async function executeTtyTurn(
+  args: TtyAppArgs,
+  state: ScreenState,
+  rerender: () => void,
+  request: TurnRequest,
+): Promise<AgentTurnResult> {
+  let result: AgentTurnResult = { messages: args.messages, outcome: 'failed', toolCalls: 0 }
   state.isBusy = true
-  rerender()
-
-  const pendingToolEntries = new Map<string, number[]>()
-  const aggregatedEditByKey = new Map<string, AggregatedEditProgress>()
-  const aggregatedEditByEntryId = new Map<number, AggregatedEditProgress>()
-  const turnStartedAt = Date.now()
-
-  args.permissions.beginTurn()
+  args.permissions.beginTurn(request.signal)
   try {
-    const nextMessages = await runAgentTurn({
+    await refreshSystemPrompt(args)
+    throwIfAborted(request.signal)
+    args.messages.push(request.input)
+    pushTranscriptEntry(state, {
+      kind: request.input.internal ? 'progress' : 'user',
+      body: request.input.internal ? `${request.mode ?? 'Agent'} continuing...` : request.input.content,
+    })
+    state.transcriptScrollOffset = 0
+    startWelcomeEscapeAnimation(state)
+    setStatus(state, 'Thinking...')
+    state.isBusy = true
+    rerender()
+
+    const pendingToolEntries = new Map<string, number[]>()
+    const aggregatedEditByKey = new Map<string, AggregatedEditProgress>()
+    const aggregatedEditByEntryId = new Map<number, AggregatedEditProgress>()
+    const turnStartedAt = Date.now()
+
+    result = await runAgentTurnWithOutcome({
       model: args.model,
-      tools: args.tools,
+      tools: args.execution!.toolsFor(request.mode),
+      runtimeContext: () => args.execution!.contextFor(request.mode),
+      maxSteps: request.mode ? 50 : undefined,
+      stopOnFatalToolError: !!request.mode,
+      signal: request.signal,
+      plan: args.plan,
       messages: args.messages,
       cwd: args.cwd,
       permissions: args.permissions,
@@ -1542,7 +1585,10 @@ async function handleInput(
         const pending = pendingToolEntries.get(toolName) ?? []
         const entryId = pending.shift()
         pendingToolEntries.set(toolName, pending)
-        if (entryId !== undefined) {
+        if (entryId !== undefined && toolName === 'update_plan' && !isError) {
+          state.recentTools.push({ name: toolName, status: 'success' })
+          updateToolEntry(state, entryId, 'success', formatPlan(args.plan.getSnapshot()))
+        } else if (entryId !== undefined) {
           const aggregated = aggregatedEditByEntryId.get(entryId)
           if (aggregated && aggregated.toolName === toolName) {
             aggregated.completed += 1
@@ -1609,12 +1655,13 @@ async function handleInput(
         rerender()
       },
     })
-    args.messages.length = 0
-    args.messages.push(...nextMessages)
+    args.messages.splice(0, args.messages.length, ...result.messages)
     await saveSession(args.cwd, args.sessionId, args.messages, args.alreadySavedCount)
     args.alreadySavedCount = args.messages.length - 1
+    if (result.error) pushTranscriptEntry(state, { kind: 'assistant', body: result.error })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
+    result = { ...result, messages: args.messages, outcome: 'failed', error: message }
     args.messages.push({
       role: 'assistant',
       content: `请求失败: ${message}`,
@@ -1633,27 +1680,37 @@ async function handleInput(
   if (getRunningToolEntries(state).length === 0) {
     setStatus(state, null)
   }
-  return false
+  rerender()
+  return result
 }
 
 function createPermissionPromptHandler(
   state: ScreenState,
   rerender: () => void,
-): (request: PermissionRequest) => Promise<PermissionPromptResult> {
-  return request =>
-    new Promise(resolve => {
-      state.pendingApproval = {
-        request,
-        resolve,
-        detailsExpanded: false,
-        detailsScrollOffset: 0,
-        selectedChoiceIndex: 0,
-        feedbackMode: false,
-        feedbackInput: '',
-      }
-      setStatus(state, 'Waiting for approval...')
+): (request: PermissionRequest, signal?: AbortSignal) => Promise<PermissionPromptResult> {
+  return (request, signal) => new Promise((resolve, reject) => {
+    const cancel = () => {
+      if (state.pendingApproval === pending) state.pendingApproval = null
+      signal?.removeEventListener('abort', cancel)
+      reject(signal?.reason ?? new Error('Approval cancelled.'))
       rerender()
-    })
+    }
+    const pending: PendingApproval = {
+      request,
+      resolve(result) {
+        signal?.removeEventListener('abort', cancel)
+        if (signal?.aborted) reject(signal.reason)
+        else resolve(result)
+      },
+      detailsExpanded: false, detailsScrollOffset: 0, selectedChoiceIndex: 0,
+      feedbackMode: false, feedbackInput: '',
+    }
+    state.pendingApproval = pending
+    if (signal?.aborted) cancel()
+    else signal?.addEventListener('abort', cancel, { once: true })
+    setStatus(state, 'Waiting for approval... (/goal pause or /loop stop is available)')
+    rerender()
+  })
 }
 
 export async function runTtyApp(args: TtyAppArgs): Promise<void> {
@@ -1703,10 +1760,28 @@ export async function runTtyApp(args: TtyAppArgs): Promise<void> {
       createPermissionPromptHandler(state, () => scheduleRender()),
     ),
   }
-  const renderNow = () => renderScreen(permissionArgs, state)
+  let screenClosed = false
+  const renderNow = () => { if (!screenClosed) renderScreen(permissionArgs, state) }
   let scheduleRender = renderNow
   scheduleRender = createRenderScheduler(renderNow)
+  permissionArgs.execution = new SessionRuntime({
+    plan: permissionArgs.plan, tools: permissionArgs.tools,
+    isBusy: () => state.isBusy,
+    execute: request => executeTtyTurn(permissionArgs, state, scheduleRender, request),
+    async recordAnswer(input) {
+      permissionArgs.messages.push(input)
+      pushTranscriptEntry(state, { kind: 'user', body: input.content })
+      await saveSession(permissionArgs.cwd, permissionArgs.sessionId, permissionArgs.messages, permissionArgs.alreadySavedCount)
+      permissionArgs.alreadySavedCount = permissionArgs.messages.length - 1
+    },
+    notice(message) {
+      pushTranscriptEntry(state, { kind: 'assistant', body: message })
+      scheduleRender()
+    },
+    settleWorkers: () => permissionArgs.subAgents.closeAll(),
+  })
   const unsubscribeSubAgents = permissionArgs.subAgents.subscribe(scheduleRender)
+  const unsubscribePlan = permissionArgs.plan.subscribe(scheduleRender)
   await permissionArgs.permissions.whenReady()
   if (
     permissionArgs.messages.length === 0 ||
@@ -1770,6 +1845,7 @@ export async function runTtyApp(args: TtyAppArgs): Promise<void> {
     let inputRemainder = ''
     let eventChain = Promise.resolve()
     let submitInFlight = false
+    let controlInFlight = false
     const statusAnimationTimer = setInterval(() => {
       state.statusAnimationFrame = (state.statusAnimationFrame + 1) % 3
       scheduleRender()
@@ -1787,10 +1863,12 @@ export async function runTtyApp(args: TtyAppArgs): Promise<void> {
     }, 3000)
 
     const cleanup = () => {
+      screenClosed = true
       clearInterval(statusAnimationTimer)
       clearInterval(welcomeAnimationTimer)
       clearInterval(inputHintTimer)
       unsubscribeSubAgents()
+      unsubscribePlan()
       process.stdin.off('data', onData)
       process.stdin.off('end', onEnd)
       process.stdin.off('close', onClose)
@@ -1806,13 +1884,39 @@ export async function runTtyApp(args: TtyAppArgs): Promise<void> {
     const finish = () => {
       if (finished) return
       finished = true
-      cleanup()
-      resolve()
+      void permissionArgs.execution!.stop().finally(() => {
+        permissionArgs.execution!.goal.manager.dispose()
+        cleanup()
+        resolve()
+      })
     }
 
     const handleEvent = async (event: ParsedInputEvent) => {
       try {
-        if (state.pendingApproval) {
+        if (finished) return
+        if (state.pendingApproval && !state.pendingApproval.feedbackMode && !state.input &&
+          event.kind === 'text' && !event.ctrl && event.text.startsWith('/')) {
+          state.input = event.text
+          state.cursorOffset = state.input.length
+          scheduleRender()
+          return
+        }
+        if (event.kind === 'key' && event.name === 'return' &&
+          /^\/(goal|loop|plan|new|resume|fork|exit)(?:\s|$)/.test(state.input.trim())) {
+          if (controlInFlight) return
+          const submittedInput = state.input
+          state.input = ''
+          state.cursorOffset = 0
+          state.selectedSlashIndex = 0
+          controlInFlight = true
+          void handleInput(permissionArgs, state, scheduleRender, submittedInput).then(shouldExit => {
+            if (shouldExit) finish()
+          }).catch(error => {
+            pushTranscriptEntry(state, { kind: 'assistant', body: error instanceof Error ? error.message : String(error) })
+          }).finally(() => { controlInFlight = false; permissionArgs.execution!.notifyIdle(); scheduleRender() })
+          return
+        }
+        if (state.pendingApproval && !state.input.startsWith('/')) {
           if (event.kind === 'text' && event.ctrl && event.text === 'o') {
             if (togglePendingApprovalExpand(state)) {
               scheduleRender()
@@ -2184,7 +2288,7 @@ export async function runTtyApp(args: TtyAppArgs): Promise<void> {
 
 
         if (event.kind === 'key' && event.name === 'return') {
-          if (state.isBusy) {
+          if (state.isBusy || controlInFlight) {
             setStatus(
               state,
               state.activeTool
@@ -2243,6 +2347,7 @@ export async function runTtyApp(args: TtyAppArgs): Promise<void> {
               scheduleRender()
             } finally {
               submitInFlight = false
+              permissionArgs.execution!.notifyIdle()
             }
           })()
           return

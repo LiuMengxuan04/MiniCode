@@ -14,6 +14,7 @@ import { summarizeMcpServers } from './mcp-status.js'
 import { MockModelAdapter } from './mock-model.js'
 import { PermissionManager } from './permissions.js'
 import { buildSystemPrompt } from './prompt.js'
+import { PlanManager } from './plan/manager.js'
 import {
   createDefaultToolRegistry,
   hydrateMcpTools,
@@ -24,7 +25,8 @@ import { SubAgentManager } from './agents/manager.js'
 import type { ChatMessage } from './types.js'
 import { renderBanner } from './ui.js'
 import { runTtyApp } from './tty-app.js'
-import { runAgentTurn } from './agent-loop.js'
+import { SessionRuntime } from './runtime/session-runtime.js'
+import { runAgentTurnWithOutcome } from './agent-loop.js'
 import {
   applyContextCollapseIfNeeded,
   createContextCollapseState,
@@ -71,9 +73,12 @@ async function main(): Promise<void> {
     runtime = null
   }
 
+  let sessionId = crypto.randomUUID().slice(0, 8)
+  const plan = new PlanManager(sessionId)
   const tools = await createDefaultToolRegistry({
     cwd,
     runtime,
+    plan,
   })
   const mcpHydration = hydrateMcpTools({
     cwd,
@@ -120,13 +125,13 @@ async function main(): Promise<void> {
 
   try {
     if (isInteractiveTerminal) {
-      let sessionId = crypto.randomUUID().slice(0, 8)
       let resolvedResumeTarget = resumeTarget
 
       if (forkTarget) {
         const forkedId = await forkSession(cwd, forkTarget)
         if (forkedId) {
           sessionId = forkedId
+          plan.reset(sessionId)
           resolvedResumeTarget = forkedId
         } else {
           console.error(`Session ${forkTarget} not found or empty.`)
@@ -138,6 +143,7 @@ async function main(): Promise<void> {
         tools,
         model,
         subAgents,
+        plan,
         messages,
         cwd,
         permissions,
@@ -164,6 +170,36 @@ async function main(): Promise<void> {
     )
     console.log('')
 
+    let localBusy = false
+    const execution = new SessionRuntime({
+      plan, tools, isBusy: () => localBusy,
+      async execute(request) {
+        await refreshSystemPrompt()
+        messages = [...messages, request.input]
+        permissions.beginTurn(request.signal)
+        try {
+          const result = await runAgentTurnWithOutcome({
+            model, tools: execution.toolsFor(request.mode), plan, messages, cwd, permissions,
+            runtimeContext: () => execution.contextFor(request.mode),
+            signal: request.signal, maxSteps: request.mode ? 50 : undefined,
+            stopOnFatalToolError: !!request.mode,
+            modelName: runtime?.model ?? '', contentReplacementState, contextCollapseState,
+            onAssistantMessage: content => console.log(`\n${content}\n`),
+          })
+          messages = result.messages
+          if (result.error) console.log(`\n${result.error}\n`)
+          return result
+        } finally {
+          permissions.endTurn()
+        }
+      },
+      async recordAnswer(input) { messages.push(input) },
+      notice: message => console.log(`\n${message}\n`),
+      settleWorkers: () => subAgents.closeAll(),
+    })
+    const stopOnInterrupt = () => { void execution.stop() }
+    process.on('SIGINT', stopOnInterrupt)
+
     const rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
@@ -178,114 +214,108 @@ async function main(): Promise<void> {
       if (input === '/exit') break
 
       try {
-        if (input === '/tools') {
-          console.log(
-            `\n${tools.list().map(tool => `${tool.name}: ${tool.description}`).join('\n')}\n`,
-          )
-          continue
-        }
-
-        if (input === '/collapse') {
-          if (!runtime?.model) {
-            console.log('\nNo model configured. Cannot collapse context.\n')
+        try {
+          const runtimeReply = await execution.command(input)
+          if (runtimeReply !== null) {
+            console.log(`\n${runtimeReply}\n`)
             continue
           }
-
-          const result = await applyContextCollapseIfNeeded(
-            messages,
-            runtime.model,
-            model,
-            contextCollapseState,
-            {
-              utilizationThreshold: 0,
-              reason: 'manual',
-            },
-          )
-          contextCollapseState.spans = [...result.state.spans]
-          contextCollapseState.enabled = result.state.enabled
-          contextCollapseState.consecutiveFailures = result.state.consecutiveFailures
-
-          if (!result.collapsed) {
+          if (input === '/plan') {
+            console.log(await tryHandleLocalCommand(input, { plan }))
+            continue
+          }
+          if (execution.turns.busy || execution.goal.running || execution.loop.running) {
+            console.log('Current turn is running. Use /goal pause, /loop stop, or /exit.')
+            continue
+          }
+          localBusy = true
+          if (input === '/tools') {
             console.log(
-              result.state.enabled
-                ? '\nNothing safe to collapse.\n'
-                : '\nContext collapse is disabled after repeated summary failures.\n',
+              `\n${tools.list().map(tool => `${tool.name}: ${tool.description}`).join('\n')}\n`,
             )
             continue
           }
 
-          const savedTokens = result.spans.reduce(
-            (sum, span) => sum + Math.max(0, span.tokensBefore - span.tokensAfter),
-            0,
-          )
-          console.log(
-            `\nContext collapse projected ${result.spans.length} span${result.spans.length === 1 ? '' : 's'} into model-visible summaries, saving ~${Math.round(savedTokens)} tokens. Original transcript is preserved.\n`,
-          )
-          continue
-        }
+          if (input === '/collapse') {
+            if (!runtime?.model) {
+              console.log('\nNo model configured. Cannot collapse context.\n')
+              continue
+            }
 
-        const localCommandResult = await tryHandleLocalCommand(input, {
-          cwd,
-          tools,
-          permissionSummary: permissions.getSummary(),
-        })
-        if (localCommandResult !== null) {
-          console.log(`\n${localCommandResult}\n`)
-          continue
-        }
+            const result = await applyContextCollapseIfNeeded(
+              messages,
+              runtime.model,
+              model,
+              contextCollapseState,
+              {
+                utilizationThreshold: 0,
+                reason: 'manual',
+              },
+            )
+            contextCollapseState.spans = [...result.state.spans]
+            contextCollapseState.enabled = result.state.enabled
+            contextCollapseState.consecutiveFailures = result.state.consecutiveFailures
 
-        if (input.startsWith('/')) {
-          const matches = findMatchingSlashCommands(input)
-          if (matches.length > 0) {
-            console.log(`\n未识别命令。你是不是想输入：\n${matches.join('\n')}\n`)
-          } else {
-            console.log(`\n未识别命令。输入 /help 查看可用命令。\n`)
+            if (!result.collapsed) {
+              console.log(
+                result.state.enabled
+                  ? '\nNothing safe to collapse.\n'
+                  : '\nContext collapse is disabled after repeated summary failures.\n',
+              )
+              continue
+            }
+
+            const savedTokens = result.spans.reduce(
+              (sum, span) => sum + Math.max(0, span.tokensBefore - span.tokensAfter),
+              0,
+            )
+            console.log(
+              `\nContext collapse projected ${result.spans.length} span${result.spans.length === 1 ? '' : 's'} into model-visible summaries, saving ~${Math.round(savedTokens)} tokens. Original transcript is preserved.\n`,
+            )
+            continue
           }
+
+          const localCommandResult = await tryHandleLocalCommand(input, {
+            cwd,
+            tools,
+            plan,
+            permissionSummary: permissions.getSummary(),
+          })
+          if (localCommandResult !== null) {
+            console.log(`\n${localCommandResult}\n`)
+            continue
+          }
+
+          if (input.startsWith('/')) {
+            const matches = findMatchingSlashCommands(input)
+            if (matches.length > 0) {
+              console.log(`\n未识别命令。你是不是想输入：\n${matches.join('\n')}\n`)
+            } else {
+              console.log(`\n未识别命令。输入 /help 查看可用命令。\n`)
+            }
+            continue
+          }
+        } catch (error) {
+          console.log(
+            `\n${error instanceof Error ? error.message : String(error)}\n`,
+          )
           continue
         }
-      } catch (error) {
-        console.log(
-          `\n${error instanceof Error ? error.message : String(error)}\n`,
-        )
-        continue
-      }
 
-      await refreshSystemPrompt()
-      messages = [...messages, { role: 'user', content: input }]
-      permissions.beginTurn()
-      try {
-        messages = await runAgentTurn({
-          model,
-          tools,
-          messages,
-          cwd,
-          permissions,
-          modelName: runtime?.model ?? '',
-          contentReplacementState,
-          contextCollapseState,
-        })
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : String(error)
-        messages = [
-          ...messages,
-          {
-            role: 'assistant',
-            content: `请求失败: ${message}`,
-          },
-        ]
+        try {
+          await execution.submit(input)
+        } catch (error) {
+          console.log(error instanceof Error ? error.message : String(error))
+        }
       } finally {
-        permissions.endTurn()
-      }
-
-      const lastAssistant = [...messages]
-        .reverse()
-        .find(message => message.role === 'assistant')
-
-      if (lastAssistant?.role === 'assistant') {
-        console.log(`\n${lastAssistant.content}\n`)
+        localBusy = false
+        execution.notifyIdle()
       }
     }
+
+    await execution.stop()
+    execution.goal.manager.dispose()
+    process.off('SIGINT', stopOnInterrupt)
 
     try {
       rl.close()

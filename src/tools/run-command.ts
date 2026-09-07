@@ -1,3 +1,4 @@
+import { throwIfAborted } from '../abort.js'
 import { execFile, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
 import { z } from 'zod'
@@ -208,6 +209,7 @@ export const runCommandTool: ToolDefinition<Input> = {
       await context.permissions?.ensureCommand(command, args, effectiveCwd)
     }
 
+    throwIfAborted(context.signal)
     if (useShell && backgroundShell) {
       const child = spawn(command, args, {
         cwd: effectiveCwd,
@@ -233,6 +235,7 @@ export const runCommandTool: ToolDefinition<Input> = {
     const result = await execFileAsync(command, args, {
       cwd: effectiveCwd,
       maxBuffer: 1024 * 1024,
+      signal: context.signal,
       env: process.env,
     })
 

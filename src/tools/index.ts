@@ -15,6 +15,8 @@ import { runCommandTool } from './run-command.js'
 import { webFetchTool } from './web-fetch.js'
 import { webSearchTool } from './web-search.js'
 import { writeFileTool } from './write-file.js'
+import type { PlanManager } from '../plan/manager.js'
+import { createUpdatePlanTool } from './plan.js'
 
 export const SUB_AGENT_TOOL_NAMES = [
   'list_files',
@@ -51,12 +53,14 @@ function buildConnectingMcpSummaries(
 export async function createDefaultToolRegistry(args: {
   cwd: string
   runtime: RuntimeConfig | null
+  plan?: PlanManager
 }): Promise<ToolRegistry> {
   const skills = await discoverSkills(args.cwd)
   const mcpServers = args.runtime?.mcpServers ?? {}
 
   return new ToolRegistry([
     askUserTool,
+    ...(args.plan ? [createUpdatePlanTool(args.plan)] : []),
     listFilesTool,
     grepFilesTool,
     readFileTool,

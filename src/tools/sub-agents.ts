@@ -31,8 +31,8 @@ export function createSubAgentTools(
       required: ['task'],
     },
     schema: z.object({ task: z.string().min(1) }),
-    async run(input) {
-      const agent = manager.spawn(input.task)
+    async run(input, context) {
+      const agent = manager.spawn(input.task, context.signal)
       return {
         ok: true,
         output: JSON.stringify({

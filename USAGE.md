@@ -46,6 +46,7 @@ This document carries the manual-style content that used to live in the main REA
 - `web_fetch`
 - `web_search`
 - `ask_user`
+- `update_plan` (root agent only)
 - `load_skill`
 - `list_mcp_resources`
 - `read_mcp_resource`
@@ -163,6 +164,7 @@ MINI_CODE_MODEL_MODE=mock npm run dev
 
 - `/help`
 - `/tools`
+- `/plan`
 - `/skills`
 - `/mcp`
 - `/status`
@@ -171,6 +173,20 @@ MINI_CODE_MODEL_MODE=mock npm run dev
 - `/model`
 - `/model <name>`
 - `/config-paths`
+
+### Plan / Todo (in-memory MVP)
+
+Ask the agent to keep a checklist for a multi-step task, for example:
+
+```text
+Inspect the search implementation and outline its test coverage. Use update_plan to track the steps; do not modify files.
+```
+
+`update_plan` replaces the complete Todo list. Existing items carry their returned IDs; new items omit `id`. The same tool can add, rename, remove, reorder, complete, and reopen items. An optional `explanation` describes the adjustment. Statuses are `pending` (`[ ]`), `in_progress` (`[>]`, Active), and `completed` (`[x]`). At most one item may be Active; invalid updates leave the current plan unchanged. An empty list clears the plan, while a fully completed list remains visible.
+
+Use `/plan` to view the list without calling the model. Successful updates also show a checklist in the TUI transcript. The latest plan is added to every root model request, including after context compression; read-only sub-agents cannot update it. A plan does not schedule work, and a normal final response still ends the turn even when Todos remain unfinished.
+
+This first stage keeps only the current session's plan in memory. Restarting, `/new`, `/resume`, or `/fork` starts an empty plan; older tool messages may remain in conversation history but do not restore plan state. `/compact` and context projection keep the live plan. Manual editing commands, selectable Todo controls, and plan persistence are deferred to the next Plan stage.
 
 ### Terminal interaction
 
@@ -490,3 +506,29 @@ npm test
 ```
 
 MiniCode is intentionally small and pragmatic. The goal is to keep the architecture understandable, hackable, and easy to extend.
+
+## Goal: continue across turns
+
+Use `/goal <description>` to create and start one in-memory Goal. `/goal` or `/goal status` shows the objective, completion criteria, status, and shared Plan. The agent first updates a nonempty Plan and sets criteria with `update_goal`. Ordinary final answers end one turn; an active Goal continues in another turn.
+
+- `/goal pause [reason]` stops automatic execution, including during a model request or approval. Already-started tools settle and their results are retained; remaining calls in the batch are cancelled.
+- `/goal resume` explicitly resumes a paused or blocked Goal. If `ask_user` is waiting, answer it first. Answering while paused records the answer and leaves the Goal paused.
+- `/goal clear` stops and removes the Goal while retaining the Plan and workspace changes. Clear an existing Goal before creating another.
+- The agent uses `get_goal` and `update_goal` only in Goal turns. It cannot create a Goal, change its original description, or resume itself.
+- Completion requires a prepared nonempty Plan with every Todo completed, nonempty criteria, a summary, and one check explanation per criterion. This MVP validates structure, not references to tool evidence. Completed/blocked updates stop the rest of the tool batch immediately.
+
+Each Goal turn is limited to 50 model/tool steps. Three consecutive automatic turns without tool calls pause the Goal. Model errors, unhandled tool errors, and session-save failures also stop automatic execution. The existing file and command approval rules still apply.
+
+Goal and Plan state are process-local. TUI `/new`, `/resume`, and `/fork` stop execution and clear Goal state; a restarted process never resumes automatically. Non-TTY input also accepts Goal commands, but cannot approve interactive operations; EOF stops execution. Goal updates, persistence, stronger evidence checks, and richer UI are follow-up work.
+
+## Loop: repeat a prompt
+
+`/loop [Nm|Nh] <prompt>` creates one process-local recurring prompt; for example, `/loop 5m Review the test output and report any changes`. Omit the interval for 10 minutes. Intervals must be at least 1 minute and fit a JavaScript timer. `/loop` displays the task; `/loop stop` stops and removes it, retaining the Plan.
+
+The first run starts when the session is idle. Each successful final is followed by a full interval measured from completion, including tool and message-save settlement. If another turn or local command is busy when the timer fires, Loop keeps one pending trigger and runs once after it becomes idle. It never accumulates missed runs. Ordinary chat can run between triggers.
+
+Loop uses the same agent runner and optional Plan, with at most 50 steps per turn. It has no Goal context or Goal tools. An active, running, stopping, or waiting Goal/Loop blocks the other mode; pause/clear the Goal or stop the Loop before switching. An unanswered Goal question must be answered or cleared first.
+
+`ask_user` suspends scheduling until a real answer arrives. Approvals continue to use the existing UI; `/loop stop` also works during approval. Errors or the step limit leave Loop paused. This MVP has no pause/resume commands or `stop_loop` tool: inspect `/loop`, then stop and recreate as needed.
+
+TUI session switches and process exit cancel timers and active runs. State is not restored after restart. Explicit background shell commands remain governed by existing behavior; stopping Loop does not undo workspace changes or terminate previously detached commands. No cron expressions, daemon, multiple tasks, or catch-up queue are provided.

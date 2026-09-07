@@ -1,3 +1,4 @@
+import { throwIfAborted } from '../abort.js'
 import { runAgentTurn } from '../agent-loop.js'
 import type { ToolRegistry } from '../tool.js'
 import type { ChatMessage, ModelAdapter } from '../types.js'
@@ -29,7 +30,8 @@ export class SubAgentManager {
 
   constructor(private readonly options: SubAgentManagerOptions) {}
 
-  spawn(task: string): SubAgentSnapshot {
+  spawn(task: string, parentSignal?: AbortSignal): SubAgentSnapshot {
+    throwIfAborted(parentSignal)
     const normalizedTask = task.trim()
     if (!normalizedTask) {
       throw new Error('Sub-agent task cannot be empty')
@@ -49,7 +51,13 @@ export class SubAgentManager {
       completion: Promise.resolve(),
     }
     this.records.set(record.id, record)
-    record.completion = this.run(record)
+    const cancel = () => {
+      record.status = 'closed'
+      record.controller.abort(parentSignal?.reason)
+      this.notify()
+    }
+    parentSignal?.addEventListener('abort', cancel, { once: true })
+    record.completion = this.run(record).finally(() => parentSignal?.removeEventListener('abort', cancel))
     this.notify()
     return this.snapshot(record)
   }
@@ -103,8 +111,8 @@ export class SubAgentManager {
       record.status = 'closed'
       record.controller.abort(new Error('Sub-agent closed by root agent'))
       this.notify()
-      await record.completion
     }
+    await record.completion
     return this.snapshot(record)
   }
 
@@ -113,6 +121,7 @@ export class SubAgentManager {
       .filter(record => record.status === 'running')
       .map(record => record.id)
     await Promise.all(runningIds.map(id => this.close(id)))
+    await Promise.all([...this.records.values()].map(record => record.completion))
   }
 
   subscribe(listener: () => void): () => void {

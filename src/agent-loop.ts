@@ -1,6 +1,8 @@
 import type { ToolRegistry } from './tool.js'
 import type {
   ChatMessage,
+  AgentTurnResult,
+  AgentTurnOutcome,
   CompressionResult,
   ModelAdapter,
   ProviderThinkingBlock,
@@ -15,7 +17,10 @@ import {
   type ContextCollapseResult,
   type ContextCollapseState,
 } from './compact/context-collapse.js'
-import { throwIfAborted } from './abort.js'
+import { abortable, throwIfAborted } from './abort.js'
+import type { PlanManager } from './plan/manager.js'
+import { withPlanContext } from './plan/context.js'
+import { withRuntimeContext } from './runtime/context.js'
 import {
   snipCompactConversation,
   type SnipCompactResult,
@@ -111,7 +116,7 @@ function isRecoverableThinkingStop(args: {
   )
 }
 
-export async function runAgentTurn(args: {
+export type AgentTurnArgs = {
   model: ModelAdapter
   tools: ToolRegistry
   messages: ChatMessage[]
@@ -130,10 +135,31 @@ export async function runAgentTurn(args: {
   contentReplacementState?: ContentReplacementState
   contextCollapseState?: ContextCollapseState
   signal?: AbortSignal
-}): Promise<ChatMessage[]> {
+  plan?: PlanManager
+  runtimeContext?: () => string
+  stopOnFatalToolError?: boolean
+}
+
+export async function runAgentTurn(args: AgentTurnArgs): Promise<ChatMessage[]> {
+  const result = await runAgentTurnWithOutcome(args)
+  if (result.error && (result.outcome === 'aborted' || result.outcome === 'failed')) {
+    throw new Error(result.error)
+  }
+  return result.messages
+}
+
+export async function runAgentTurnWithOutcome(args: AgentTurnArgs): Promise<AgentTurnResult> {
   const maxSteps = args.maxSteps
   const modelName = args.modelName ?? ''
   let messages = args.messages
+  let toolCalls = 0
+  const finish = (outcome: AgentTurnOutcome, error?: string): AgentTurnResult => ({ messages, outcome, toolCalls, ...(error ? { error } : {}) })
+  const model: ModelAdapter = args.signal ? {
+    next(request, options) {
+      throwIfAborted(args.signal)
+      return abortable(args.model.next(request, { ...options, signal: args.signal }), args.signal)
+    },
+  } : args.model
   let emptyResponseRetryCount = 0
   let recoverableThinkingRetryCount = 0
   let toolErrorCount = 0
@@ -158,6 +184,7 @@ export async function runAgentTurn(args: {
       ...messages,
       {
         role: 'user',
+        internal: 'continuation',
         content,
       },
     ]
@@ -174,300 +201,310 @@ export async function runAgentTurn(args: {
     ]
   }
 
-  for (let step = 0; maxSteps == null || step < maxSteps; step++) {
-    throwIfAborted(args.signal)
-    let latestStats: import('./utils/token-estimator.js').ContextStats | null = null
-    let modelMessages = messages
-
-    if (modelName) {
-      latestStats = computeContextStats(messages, modelName)
-
-      if (!snippedThisTurn) {
-        const snipResult = await snipCompactConversation({
-          messages,
-          contextStats: latestStats,
-          modelContextWindow: latestStats.effectiveInput,
-        })
-        if (snipResult.didSnip) {
-          messages = snipResult.messages
-          snippedThisTurn = true
-          await args.onSnipCompact?.(snipResult)
-          latestStats = computeContextStats(messages, modelName)
-          args.onContextStats?.(latestStats)
-        }
-      }
-
-      const beforeMicrocompact = messages
-      messages = microcompact(messages, modelName)
-      if (messages !== beforeMicrocompact) {
-        latestStats = computeContextStats(messages, modelName)
-        args.onContextStats?.(latestStats)
-      }
-
-      const collapseResult = await applyContextCollapseIfNeeded(
-        messages,
-        modelName,
-        args.model,
-        contextCollapseState,
-      )
-      replaceContextCollapseState(collapseResult.state)
-      modelMessages = collapseResult.messages
-      if (collapseResult.collapsed) {
-        await args.onContextCollapse?.(collapseResult)
-        latestStats = computeContextStats(modelMessages, modelName)
-        args.onContextStats?.(latestStats)
-      } else if (modelMessages !== messages) {
-        latestStats = computeContextStats(modelMessages, modelName)
-        args.onContextStats?.(latestStats)
-      }
-    }
-
-    // AutoCompact: LLM-based compression when context is critical (first step only)
-    if (step === 0 && modelName) {
-      latestStats = latestStats ?? computeContextStats(modelMessages, modelName)
-      args.onContextStats?.(latestStats)
-      if (latestStats.warningLevel === 'critical' || latestStats.warningLevel === 'blocked') {
-        const result = await autoCompact(modelMessages, modelName, args.model)
-        if (result) {
-          messages = result.messages
-          modelMessages = messages
-          replaceContextCollapseState(createContextCollapseState())
-          await args.onAutoCompact?.(result)
-          latestStats = computeContextStats(messages, modelName)
-          args.onContextStats?.(latestStats)
-        }
-      }
-    }
-
-    const requestResult = await requestWithPromptTooLongRecovery({
-      model: args.model,
-      modelName,
-      messages: modelMessages,
-      options: {
-        tools: args.tools.list(),
-        signal: args.signal,
-      },
-      onCompacted: async (compacted) => {
-        messages = compacted.messages
-        modelMessages = compacted.messages
-        snippedThisTurn = true
-        await args.onSnipCompact?.(compacted)
-        const stats = computeContextStats(compacted.messages, modelName)
-        args.onContextStats?.(stats)
-      },
-    })
-    const next = requestResult.step
-
-    if (requestResult.messages !== modelMessages) {
-      modelMessages = requestResult.messages
-      messages = requestResult.messages
-      latestStats = computeContextStats(messages, modelName)
-      args.onContextStats?.(latestStats)
-    }
-
-    if (next.type === 'assistant') {
-      const isEmpty = isEmptyAssistantResponse(next.content)
-      if (
-        !isEmpty &&
-        shouldTreatAssistantAsProgress({
-          kind: next.kind,
-          content: next.content,
-          sawToolResultThisTurn,
-        })
-      ) {
-        args.onProgressMessage?.(next.content)
-        appendThinkingBlocks(next.thinkingBlocks)
-        messages = [
-          ...messages,
-          { role: 'assistant_progress', content: next.content },
-        ]
-        pushContinuationPrompt(
-          sawToolResultThisTurn && next.kind !== 'progress'
-            ? 'Continue from your progress update. You have already used tools in this turn, so treat plain status text as progress, not a final answer. Respond with the next concrete tool call, code change, or an explicit <final> answer only if the task is truly complete.'
-            : 'Continue immediately from your <progress> update with concrete tool calls, code changes, or an explicit <final> answer only if the task is complete.',
-        )
-        continue
-      }
-
-      if (
-        isRecoverableThinkingStop({
-          isEmpty,
-          stopReason: next.diagnostics?.stopReason,
-          blockTypes: next.diagnostics?.blockTypes,
-          ignoredBlockTypes: next.diagnostics?.ignoredBlockTypes,
-        }) &&
-        recoverableThinkingRetryCount < 3
-      ) {
-        recoverableThinkingRetryCount += 1
-        const stopReason = next.diagnostics?.stopReason
-        const progressContent =
-          stopReason === 'max_tokens'
-            ? '模型在 thinking 阶段触发 max_tokens，正在继续请求后续步骤...'
-            : '模型返回 pause_turn，正在继续请求后续步骤...'
-        args.onProgressMessage?.(progressContent)
-        messages = [
-          ...messages,
-          { role: 'assistant_progress', content: progressContent },
-        ]
-        pushContinuationPrompt(
-          stopReason === 'max_tokens'
-            ? 'Your previous response hit max_tokens during thinking before producing the next actionable step. Resume immediately and continue with the next concrete tool call, code change, or an explicit <final> answer only if the task is complete. Do not repeat the earlier plan.'
-            : 'Resume from the previous pause_turn and continue the task immediately. Produce the next concrete tool call, code change, or an explicit <final> answer only if the task is complete.',
-        )
-        continue
-      }
-
-      if (isEmpty && emptyResponseRetryCount < 2) {
-        emptyResponseRetryCount += 1
-        pushContinuationPrompt(
-          sawToolResultThisTurn
-            ? 'Your last response was empty after recent tool results. Continue immediately by trying the next concrete step, adapting to any tool errors, or giving an explicit <final> answer only if the task is complete.'
-            : 'Your last response was empty. Continue immediately with concrete tool calls, code changes, or an explicit <final> answer only if the task is complete.',
-        )
-        continue
-      }
-
-      if (isEmpty) {
-        const diagnosticsSuffix = formatDiagnostics({
-          stopReason: next.diagnostics?.stopReason,
-          blockTypes: next.diagnostics?.blockTypes,
-          ignoredBlockTypes: next.diagnostics?.ignoredBlockTypes,
-        })
-        const fallbackContent =
-          sawToolResultThisTurn
-            ? toolErrorCount > 0
-              ? `工具执行后模型返回空响应，已停止当前回合。最近有 ${toolErrorCount} 个工具报错；请重试、调整命令，或让模型改用其他方案。${diagnosticsSuffix}`
-              : `工具执行后模型返回空响应，已停止当前回合。请重试，或要求模型继续完成剩余步骤。${diagnosticsSuffix}`
-            : `模型返回空响应，已停止当前回合。请重试，或要求模型继续。${diagnosticsSuffix}`
-
-        args.onAssistantMessage?.(fallbackContent, { final: true })
-        appendThinkingBlocks(next.thinkingBlocks)
-        return [
-          ...messages,
-          {
-            role: 'assistant',
-            content: fallbackContent,
-          },
-        ]
-      }
-
-      const assistantMessage: ChatMessage = {
-        role: 'assistant',
-        content: next.content,
-      }
-      appendThinkingBlocks(next.thinkingBlocks)
-      const withAssistant: ChatMessage[] = [
-        ...messages,
-        withProviderUsage(assistantMessage, next.usage),
-      ]
-
-      if (!isEmpty) {
-        args.onAssistantMessage?.(next.content, { final: true })
-      }
-
-      return withAssistant
-    }
-
-    appendThinkingBlocks(next.thinkingBlocks)
-
-    if (next.content) {
-      if (next.contentKind === 'progress') {
-        args.onProgressMessage?.(next.content)
-        messages = [
-          ...messages,
-          withProviderUsage({ role: 'assistant_progress', content: next.content }, next.usage),
-        ]
-        pushContinuationPrompt(
-          'Continue immediately from your <progress> update with concrete tool calls, code changes, or an explicit <final> answer only if the task is complete.',
-        )
-      } else {
-        args.onAssistantMessage?.(
-          next.content,
-          (next.calls?.length ?? 0) > 0 ? undefined : { final: true },
-        )
-        messages = [
-          ...messages,
-          withProviderUsage(
-            { role: 'assistant', content: next.content },
-            (next.calls?.length ?? 0) > 0 ? undefined : next.usage,
-          ),
-        ]
-      }
-    }
-
-    if ((next.calls?.length ?? 0) === 0 && next.content && next.contentKind !== 'progress') {
-      return messages
-    }
-
-    const executedToolResults: Array<{
-      call: (typeof next.calls)[number]
-      result: Awaited<ReturnType<ToolRegistry['execute']>>
-      toolResult: PendingToolResult
-    }> = []
-
-    for (const call of next.calls) {
+  try {
+    for (let step = 0; maxSteps == null || step < maxSteps; step++) {
       throwIfAborted(args.signal)
-      args.onToolStart?.(call.toolName, call.input)
-      const result = await args.tools.execute(
-        call.toolName,
-        call.input,
-        { cwd: args.cwd, permissions: args.permissions },
-      )
-      sawToolResultThisTurn = true
-      if (!result.ok) {
-        toolErrorCount += 1
+      let latestStats: import('./utils/token-estimator.js').ContextStats | null = null
+      let modelMessages = messages
+
+      if (modelName) {
+        latestStats = computeContextStats(messages, modelName)
+
+        if (!snippedThisTurn) {
+          const snipResult = await snipCompactConversation({
+            messages,
+            contextStats: latestStats,
+            modelContextWindow: latestStats.effectiveInput,
+          })
+          if (snipResult.didSnip) {
+            messages = snipResult.messages
+            snippedThisTurn = true
+            await args.onSnipCompact?.(snipResult)
+            latestStats = computeContextStats(messages, modelName)
+            args.onContextStats?.(latestStats)
+          }
+        }
+
+        const beforeMicrocompact = messages
+        messages = microcompact(messages, modelName)
+        if (messages !== beforeMicrocompact) {
+          latestStats = computeContextStats(messages, modelName)
+          args.onContextStats?.(latestStats)
+        }
+
+        const collapseResult = await applyContextCollapseIfNeeded(
+          messages,
+          modelName,
+          model,
+          contextCollapseState,
+        )
+        throwIfAborted(args.signal)
+        replaceContextCollapseState(collapseResult.state)
+        modelMessages = collapseResult.messages
+        if (collapseResult.collapsed) {
+          await args.onContextCollapse?.(collapseResult)
+          latestStats = computeContextStats(modelMessages, modelName)
+          args.onContextStats?.(latestStats)
+        } else if (modelMessages !== messages) {
+          latestStats = computeContextStats(modelMessages, modelName)
+          args.onContextStats?.(latestStats)
+        }
       }
-      args.onToolResult?.(call.toolName, result.output, !result.ok)
 
-      const toolResult = await replaceLargeToolResult({
-        role: 'tool_result',
-        toolUseId: call.id,
-        toolName: call.toolName,
-        content: result.output,
-        isError: !result.ok,
-      }, contentReplacementState)
+      // AutoCompact: LLM-based compression when context is critical (first step only)
+      if (step === 0 && modelName) {
+        latestStats = latestStats ?? computeContextStats(modelMessages, modelName)
+        args.onContextStats?.(latestStats)
+        if (latestStats.warningLevel === 'critical' || latestStats.warningLevel === 'blocked') {
+          const result = await autoCompact(modelMessages, modelName, model)
+          throwIfAborted(args.signal)
+          if (result) {
+            messages = result.messages
+            modelMessages = messages
+            replaceContextCollapseState(createContextCollapseState())
+            await args.onAutoCompact?.(result)
+            latestStats = computeContextStats(messages, modelName)
+            args.onContextStats?.(latestStats)
+          }
+        }
+      }
 
-      executedToolResults.push({
-        call,
-        result,
-        toolResult,
+      throwIfAborted(args.signal)
+      const requestResult = await requestWithPromptTooLongRecovery({
+        model: {
+          next(requestMessages, options) {
+            if (args.plan) {
+              requestMessages = withPlanContext(requestMessages, args.plan.getSnapshot())
+            }
+            if (args.runtimeContext) {
+              requestMessages = withRuntimeContext(requestMessages, args.runtimeContext())
+            }
+            if (modelName) args.onContextStats?.(computeContextStats(requestMessages, modelName))
+            return model.next(requestMessages, options)
+          },
+        },
+        modelName,
+        messages: modelMessages,
+        options: {
+          tools: args.tools.list(),
+          signal: args.signal,
+        },
+        onCompacted: async (compacted) => {
+          throwIfAborted(args.signal)
+          messages = compacted.messages
+          modelMessages = compacted.messages
+          snippedThisTurn = true
+          await args.onSnipCompact?.(compacted)
+          latestStats = computeContextStats(compacted.messages, modelName)
+          args.onContextStats?.(latestStats)
+        },
       })
-    }
+      const next = requestResult.step
+      throwIfAborted(args.signal)
 
-    const budgetedResults = await applyToolResultBudget(
-      executedToolResults.map(entry => entry.toolResult),
-      contentReplacementState,
-    )
-    const toolResultById = new Map(
-      budgetedResults.results.map(result => [result.toolUseId, result]),
-    )
+      if (next.type === 'assistant') {
+        const isEmpty = isEmptyAssistantResponse(next.content)
+        if (
+          !isEmpty &&
+          shouldTreatAssistantAsProgress({
+            kind: next.kind,
+            content: next.content,
+            sawToolResultThisTurn,
+          })
+        ) {
+          args.onProgressMessage?.(next.content)
+          appendThinkingBlocks(next.thinkingBlocks)
+          messages = [
+            ...messages,
+            { role: 'assistant_progress', content: next.content },
+          ]
+          pushContinuationPrompt(
+            sawToolResultThisTurn && next.kind !== 'progress'
+              ? 'Continue from your progress update. You have already used tools in this turn, so treat plain status text as progress, not a final answer. Respond with the next concrete tool call, code change, or an explicit <final> answer only if the task is truly complete.'
+              : 'Continue immediately from your <progress> update with concrete tool calls, code changes, or an explicit <final> answer only if the task is complete.',
+          )
+          continue
+        }
 
-    const toolCallMessages = executedToolResults.map((entry, i) => {
-      const toolCallMessage: ChatMessage = {
-        role: 'assistant_tool_call',
-        toolUseId: entry.call.id,
-        toolName: entry.call.toolName,
-        input: entry.call.input,
+        if (
+          isRecoverableThinkingStop({
+            isEmpty,
+            stopReason: next.diagnostics?.stopReason,
+            blockTypes: next.diagnostics?.blockTypes,
+            ignoredBlockTypes: next.diagnostics?.ignoredBlockTypes,
+          }) &&
+          recoverableThinkingRetryCount < 3
+        ) {
+          recoverableThinkingRetryCount += 1
+          const stopReason = next.diagnostics?.stopReason
+          const progressContent =
+            stopReason === 'max_tokens'
+              ? '模型在 thinking 阶段触发 max_tokens，正在继续请求后续步骤...'
+              : '模型返回 pause_turn，正在继续请求后续步骤...'
+          args.onProgressMessage?.(progressContent)
+          messages = [
+            ...messages,
+            { role: 'assistant_progress', content: progressContent },
+          ]
+          pushContinuationPrompt(
+            stopReason === 'max_tokens'
+              ? 'Your previous response hit max_tokens during thinking before producing the next actionable step. Resume immediately and continue with the next concrete tool call, code change, or an explicit <final> answer only if the task is complete. Do not repeat the earlier plan.'
+              : 'Resume from the previous pause_turn and continue the task immediately. Produce the next concrete tool call, code change, or an explicit <final> answer only if the task is complete.',
+          )
+          continue
+        }
+
+        if (isEmpty && emptyResponseRetryCount < 2) {
+          emptyResponseRetryCount += 1
+          pushContinuationPrompt(
+            sawToolResultThisTurn
+              ? 'Your last response was empty after recent tool results. Continue immediately by trying the next concrete step, adapting to any tool errors, or giving an explicit <final> answer only if the task is complete.'
+              : 'Your last response was empty. Continue immediately with concrete tool calls, code changes, or an explicit <final> answer only if the task is complete.',
+          )
+          continue
+        }
+
+        if (isEmpty) {
+          const diagnosticsSuffix = formatDiagnostics({
+            stopReason: next.diagnostics?.stopReason,
+            blockTypes: next.diagnostics?.blockTypes,
+            ignoredBlockTypes: next.diagnostics?.ignoredBlockTypes,
+          })
+          const fallbackContent =
+            sawToolResultThisTurn
+              ? toolErrorCount > 0
+                ? `工具执行后模型返回空响应，已停止当前回合。最近有 ${toolErrorCount} 个工具报错；请重试、调整命令，或让模型改用其他方案。${diagnosticsSuffix}`
+                : `工具执行后模型返回空响应，已停止当前回合。请重试，或要求模型继续完成剩余步骤。${diagnosticsSuffix}`
+              : `模型返回空响应，已停止当前回合。请重试，或要求模型继续。${diagnosticsSuffix}`
+
+          args.onAssistantMessage?.(fallbackContent, { final: true })
+          appendThinkingBlocks(next.thinkingBlocks)
+          messages = [
+            ...messages,
+            {
+              role: 'assistant',
+              content: fallbackContent,
+            },
+          ]
+          return finish('failed')
+        }
+
+        const assistantMessage: ChatMessage = {
+          role: 'assistant',
+          content: next.content,
+        }
+        appendThinkingBlocks(next.thinkingBlocks)
+        const withAssistant: ChatMessage[] = [
+          ...messages,
+          withProviderUsage(assistantMessage, next.usage),
+        ]
+
+        if (!isEmpty) {
+          args.onAssistantMessage?.(next.content, { final: true })
+        }
+
+        messages = withAssistant
+        return finish('final')
       }
 
-      return withProviderUsage(
-        toolCallMessage,
-        i === executedToolResults.length - 1 ? next.usage : undefined,
+      appendThinkingBlocks(next.thinkingBlocks)
+
+      if (next.content) {
+        if (next.contentKind === 'progress') {
+          args.onProgressMessage?.(next.content)
+          messages = [
+            ...messages,
+            withProviderUsage({ role: 'assistant_progress', content: next.content }, next.usage),
+          ]
+          pushContinuationPrompt(
+            'Continue immediately from your <progress> update with concrete tool calls, code changes, or an explicit <final> answer only if the task is complete.',
+          )
+        } else {
+          args.onAssistantMessage?.(
+            next.content,
+            (next.calls?.length ?? 0) > 0 ? undefined : { final: true },
+          )
+          messages = [
+            ...messages,
+            withProviderUsage(
+              { role: 'assistant', content: next.content },
+              (next.calls?.length ?? 0) > 0 ? undefined : next.usage,
+            ),
+          ]
+        }
+      }
+
+      if ((next.calls?.length ?? 0) === 0 && next.content && next.contentKind !== 'progress') {
+        return finish('final')
+      }
+
+      const executedToolResults: Array<{
+        call: (typeof next.calls)[number]
+        result: Awaited<ReturnType<ToolRegistry['execute']>>
+        toolResult: PendingToolResult
+      }> = []
+
+      let batchOutcome: AgentTurnOutcome | undefined
+      const toolCallMessages = next.calls.map((call, i) => withProviderUsage<ChatMessage>({
+        role: 'assistant_tool_call', toolUseId: call.id, toolName: call.toolName, input: call.input,
+      }, i === next.calls.length - 1 ? next.usage : undefined))
+      messages = [...messages, ...toolCallMessages, ...next.calls.map(call => ({
+        role: 'tool_result' as const, toolUseId: call.id, toolName: call.toolName,
+        content: 'Cancelled before execution.', isError: true,
+      }))]
+
+      for (const call of next.calls) {
+        if (batchOutcome || args.signal?.aborted) continue
+        toolCalls++
+        args.onToolStart?.(call.toolName, call.input)
+        const result = await args.tools.execute(
+          call.toolName,
+          call.input,
+          { cwd: args.cwd, permissions: args.permissions, signal: args.signal },
+        )
+        sawToolResultThisTurn = true
+        if (!result.ok) {
+          toolErrorCount += 1
+        }
+        messages = messages.map(message => message.role === 'tool_result' && message.toolUseId === call.id
+          ? { ...message, content: result.output, isError: !result.ok } : message)
+        args.onToolResult?.(call.toolName, result.output, !result.ok)
+
+        const toolResult = await replaceLargeToolResult({
+          role: 'tool_result',
+          toolUseId: call.id,
+          toolName: call.toolName,
+          content: result.output,
+          isError: !result.ok,
+        }, contentReplacementState)
+
+        messages = messages.map(message => message.role === 'tool_result' && message.toolUseId === call.id ? toolResult : message)
+        if (result.awaitUser) batchOutcome = 'awaiting_user'
+        else if (result.stop) batchOutcome = 'controlled_stop'
+        else if (result.fatal && args.stopOnFatalToolError) batchOutcome = 'failed'
+
+        executedToolResults.push({
+          call,
+          result,
+          toolResult,
+        })
+      }
+
+      const budgetedResults = await applyToolResultBudget(
+        executedToolResults.map(entry => entry.toolResult),
+        contentReplacementState,
       )
-    })
-    const toolResults = executedToolResults.map(entry =>
-      toolResultById.get(entry.call.id) ?? entry.toolResult,
-    )
+      const toolResultById = new Map(
+        budgetedResults.results.map(result => [result.toolUseId, result]),
+      )
 
-    messages = [
-      ...messages,
-      ...toolCallMessages,
-      ...toolResults,
-    ]
+      messages = messages.map(message => message.role === 'tool_result'
+        ? toolResultById.get(message.toolUseId) ?? message
+        : message)
 
-    const awaitUserEntry = executedToolResults.find(entry => entry.result.awaitUser)
-    if (awaitUserEntry) {
-      const question = awaitUserEntry.result.output.trim()
+      const awaitUserEntry = executedToolResults.find(entry => entry.result.awaitUser)
+      if (awaitUserEntry) {
+        const question = awaitUserEntry.result.output.trim()
         if (question.length > 0) {
           args.onAssistantMessage?.(question)
           messages = [
@@ -478,17 +515,23 @@ export async function runAgentTurn(args: {
             },
           ]
         }
-        return messages
+        return finish('awaiting_user')
+      }
+      if (args.signal?.aborted) return finish('aborted', String(args.signal.reason ?? 'Execution stopped'))
+      if (batchOutcome) return finish(batchOutcome)
     }
-  }
 
-  const maxStepContent = `达到最大工具步数限制，已停止当前回合。`
-  args.onAssistantMessage?.(maxStepContent, { final: true })
-  return [
-    ...messages,
-    {
-      role: 'assistant',
-      content: maxStepContent,
-    },
-  ]
+    const maxStepContent = `达到最大工具步数限制，已停止当前回合。`
+    args.onAssistantMessage?.(maxStepContent, { final: true })
+    messages = [
+      ...messages,
+      {
+        role: 'assistant',
+        content: maxStepContent,
+      },
+    ]
+    return finish('max_steps')
+  } catch (error) {
+    return finish(args.signal?.aborted ? 'aborted' : 'failed', error instanceof Error ? error.message : String(error))
+  }
 }

@@ -124,6 +124,9 @@ MiniCode 适合你，如果你想要：
 
 - 单轮支持多步工具执行，形成 `model -> tool -> model` 闭环。
 - 支持最多 3 个并发的只读 sub-agent；root agent 统一修改代码，并可等待或主动关闭 worker。
+- 支持同一会话内跨 root 回合共享的内存 Todo 清单，Agent 通过 `update_plan` 更新，用户通过 `/plan` 查看。
+- 支持用户创建的进程内 Goal，跨回合自动推进，提供暂停、恢复和显式完成检查。
+- 支持单个进程内 Loop，在每轮完成后按固定间隔重复提示词，可共用 Plan，并与启用中的 Goal 互斥。
 - 提供全屏终端交互界面，支持输入历史、transcript 滚动、slash 命令菜单和审批交互。
 - 会话按项目隔离持久化，支持恢复、重命名、分叉和压缩。
 - 上下文统计优先使用 provider usage，并支持 tail estimate、自动压缩、上下文折叠和裁剪压缩。
@@ -173,6 +176,9 @@ MINI_CODE_MODEL_MODE=mock npm run dev
 
 - `/help`：查看交互帮助。
 - `/tools`：查看当前可用工具。
+- `/plan`：查看当前内存中的 Todo 清单。
+- `/goal <目标>`、`/goal [status]`、`/goal pause [原因]`、`/goal resume`、`/goal clear`：创建、查看和控制 Goal。
+- `/loop [Nm|Nh] <提示词>`、`/loop`、`/loop stop`：创建、查看和停止重复触发，默认 10 分钟，最短 1 分钟。
 - `/skills`：查看当前可发现的 skills。
 - `/mcp`：查看当前 MCP 连接状态。
 - `/status`：查看会话和上下文状态。
@@ -198,10 +204,10 @@ MINI_CODE_MODEL_MODE=mock npm run dev
 ## Star 趋势
 
 <p align="center">
-  <a href="https://star-history.com/#LiuMengxuan04/MiniCode&Date">
+  <a href="https://star-history.dera.page/#LiuMengxuan04/MiniCode&Date">
     <img
       alt="Star History Chart"
-      src="https://api.star-history.com/image?repos=LiuMengxuan04/MiniCode&style=landscape1"
+      src="https://star-history.dera.page/svg?repos=LiuMengxuan04/MiniCode&style=landscape1"
     />
   </a>
 </p>
