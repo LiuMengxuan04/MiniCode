@@ -69,6 +69,7 @@ import type { ToolRegistry } from './tool.js'
 import type { ChatMessage, CompressionResult, ModelAdapter, AgentTurnResult } from './types.js'
 import type { ContextStats } from './utils/token-estimator.js'
 import type { SubAgentManager } from './agents/manager.js'
+import type { TraceRecorder } from './trace.js'
 import { computeContextStats } from './utils/token-estimator.js'
 import { manualCompact } from './compact/manual-compact.js'
 import { snipCompactConversation } from './compact/snipCompact.js'
@@ -98,6 +99,7 @@ type TtyAppArgs = {
   alreadySavedCount: number
   resumeTarget?: string | 'picker'
   execution?: SessionRuntime
+  traceRecorder: TraceRecorder
 }
 
 type PendingApproval = {
@@ -1373,6 +1375,7 @@ async function handleInput(
     tools: args.tools,
     plan: args.plan,
     permissionSummary: args.permissions.getSummary(),
+    traceStatus: args.traceRecorder.status(),
   })
   if (localCommandResult !== null) {
     pushTranscriptEntry(state, {
@@ -1452,6 +1455,9 @@ async function executeTtyTurn(
       modelName: args.runtime?.model ?? '',
       contentReplacementState: args.contentReplacementState,
       contextCollapseState: args.contextCollapseState,
+      onTrace(event) {
+        args.traceRecorder.record(event, { sessionId: args.sessionId })
+      },
       onContextStats(stats) {
         state.contextStats = stats
         rerender()

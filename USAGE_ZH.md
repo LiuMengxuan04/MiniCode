@@ -168,6 +168,7 @@ MINI_CODE_MODEL_MODE=mock npm run dev
 - `/skills`
 - `/mcp`
 - `/status`
+- `/trace`
 - `/init`
 - `/memory`
 - `/model`
@@ -256,6 +257,12 @@ MiniCode 现在把长会话作为一等工作流处理：
 
 会话存储和上下文压缩会一起工作：`loadSession` 会从最近的 compact boundary 之后恢复，而 `loadTranscript` 仍然可以从 JSONL 事件日志重建可见 transcript。
 
+## 运行追踪
+
+MiniCode 提供默认关闭的结构化 JSONL trace，用于排查慢请求、工具失败和上下文压缩行为。可在 `~/.mini-code/settings.json` 中设置 `"trace": true`，或在启动时设置 `MINI_CODE_TRACE=1`。环境变量优先级更高，因此 `MINI_CODE_TRACE=0` 可临时关闭。
+
+trace 按项目写入 `~/.mini-code/traces/` 下的 JSONL 文件。输入 `/trace` 可查看当前状态和精确路径。每条事件包含顺序号、耗时、消息/工具调用计数、token usage、工具名称和结果状态。为避免诊断日志泄露代码或密钥，prompt 正文、模型回答、工具输入和工具输出均不会被记录。trace 写入异步串行化，记录器异常不会中断 agent loop。
+
 ## 配置
 
 配置示例：
@@ -263,6 +270,7 @@ MiniCode 现在把长会话作为一等工作流处理：
 ```json
 {
   "model": "your-model-name",
+  "trace": false,
   "mcpServers": {
     "filesystem": {
       "command": "npx",

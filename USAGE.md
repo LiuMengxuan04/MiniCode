@@ -169,6 +169,7 @@ MINI_CODE_MODEL_MODE=mock npm run dev
 - `/skills`
 - `/mcp`
 - `/status`
+- `/trace`
 - `/init`
 - `/memory`
 - `/model`
@@ -257,6 +258,12 @@ MiniCode now treats long-running conversations as a first-class workflow:
 
 Session storage and context compression work together: `loadSession` resumes from the latest compact boundary, while `loadTranscript` can still rebuild the visible transcript from the JSONL event log.
 
+## Runtime Tracing
+
+MiniCode includes opt-in structured JSONL tracing for investigating slow model requests, tool failures, and context-compression behavior. Enable it with `"trace": true` in `~/.mini-code/settings.json` or set `MINI_CODE_TRACE=1` when launching. The environment variable takes precedence, so `MINI_CODE_TRACE=0` temporarily disables tracing.
+
+Trace files are scoped by project under `~/.mini-code/traces/`. Run `/trace` to inspect the current status and exact output path. Events include sequence numbers, durations, message/tool-call counts, token usage, tool names, and result status. Prompt text, model responses, tool inputs, and tool outputs are deliberately excluded so source code and secrets do not leak into diagnostic logs. Writes are serialized asynchronously, and recorder failures never interrupt the agent loop.
+
 ## Configuration
 
 Example configuration:
@@ -264,6 +271,7 @@ Example configuration:
 ```json
 {
   "model": "your-model-name",
+  "trace": false,
   "mcpServers": {
     "filesystem": {
       "command": "npx",

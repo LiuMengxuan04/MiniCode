@@ -134,6 +134,7 @@ MiniCode 适合你，如果你想要：
 - 支持通过 `SKILL.md` 发现本地 skills，也支持通过 stdio 或远程 HTTP 接入 MCP tools/resources/prompts。
 - 文件修改前先 review diff，并对路径和命令执行做权限检查。
 - 超大工具结果会落盘保存，并在上下文里替换成短预览和文件路径，减少长输出对对话空间的挤占。
+- 提供隐私安全、可选的 JSONL 运行追踪，用于分析模型/工具耗时、失败和上下文压缩行为。
 
 完整命令、配置示例、会话机制和 Skills/MCP 用法已经移到 [详细使用指南](./USAGE_ZH.md)。
 
@@ -183,6 +184,7 @@ MINI_CODE_MODEL_MODE=mock npm run dev
 - `/skills`：查看当前可发现的 skills。
 - `/mcp`：查看当前 MCP 连接状态。
 - `/status`：查看会话和上下文状态。
+- `/trace`：查看运行追踪开关和输出路径。
 - `/init`：为当前项目生成 `.mini-code/` 与 `MINI.md` 初始化文件。
 - `/memory`：查看本轮实际加载的分层 memory 文件。
 - `/model` / `/model <name>`：查看或切换模型。

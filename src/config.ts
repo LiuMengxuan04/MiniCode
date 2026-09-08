@@ -7,6 +7,7 @@ export type MiniCodeSettings = {
   env?: Record<string, string | number>
   model?: string
   maxOutputTokens?: number
+  trace?: boolean
   mcpServers?: Record<string, McpServerConfig>
 }
 

@@ -129,10 +129,12 @@ MiniCode can already extend itself through MCP, so built-in `WebFetch` / `WebSea
 
 ### 12. Evaluation and trace infrastructure
 
+**Status: structured trace capture is implemented; benchmark harnesses and reproducible agent evaluation remain planned.**
+
 This includes:
 
 - benchmark harnesses
-- structured trace capture
+- structured trace capture (implemented, opt-in, with prompt/tool payloads excluded)
 - reproducible agent evaluation
 
 This is valuable for research and comparison, but it is not on the critical path for the main product loop.
