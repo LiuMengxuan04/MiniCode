@@ -9,6 +9,8 @@ import {
   saveScopedMcpServers,
 } from './config.js'
 import { discoverSkills, installSkill, removeManagedSkill } from './skills.js'
+import path from 'node:path'
+import { formatEvalReport, runReplayEvalFile } from './eval.js'
 
 function printUsage(): void {
   console.log(`minicode management commands
@@ -21,7 +23,9 @@ minicode mcp remove <name> [--project]
 
 minicode skills list
 minicode skills add <path-to-skill-or-dir> [--name <name>] [--project]
-minicode skills remove <name> [--project]`)
+minicode skills remove <name> [--project]
+
+minicode eval <suite.json> [--output <report.json>]`)
 }
 
 function parseScope(args: string[]): {
@@ -264,6 +268,29 @@ async function handleSkillsCommand(cwd: string, args: string[]): Promise<boolean
   return true
 }
 
+async function handleEvalCommand(cwd: string, args: string[]): Promise<boolean> {
+  const rest = [...args]
+  const output = takeOption(rest, '--output')
+  const suite = rest.shift()
+  if (!suite) {
+    throw new Error('Missing eval suite path.')
+  }
+  if (rest.length > 0) {
+    throw new Error(`Unknown arguments: ${rest.join(' ')}`)
+  }
+
+  const outputPath = output ? path.resolve(cwd, output) : undefined
+  const report = await runReplayEvalFile({
+    suitePath: path.resolve(cwd, suite),
+    cwd,
+    outputPath,
+  })
+  console.log(formatEvalReport(report))
+  if (outputPath) console.log(`Report: ${outputPath}`)
+  if (report.summary.failed > 0) process.exitCode = 1
+  return true
+}
+
 export async function maybeHandleManagementCommand(
   cwd: string,
   argv: string[],
@@ -279,6 +306,10 @@ export async function maybeHandleManagementCommand(
 
   if (category === 'skills') {
     return handleSkillsCommand(cwd, rest)
+  }
+
+  if (category === 'eval') {
+    return handleEvalCommand(cwd, rest)
   }
 
   if (category === 'help' || category === '--help' || category === '-h') {

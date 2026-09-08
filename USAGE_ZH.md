@@ -12,6 +12,8 @@
 - [命令](#命令)
 - [分层 Memory 与项目初始化](#分层-memory-与项目初始化)
 - [长会话与上下文管理](#长会话与上下文管理)
+- [运行追踪](#运行追踪)
+- [确定性 Replay 评测](#确定性-replay-评测)
 - [配置](#配置)
 - [Skills 与 MCP 用法](#skills-与-mcp-用法)
 - [产品介绍展示页](#产品介绍展示页)
@@ -32,6 +34,7 @@
 - 支持通过 `SKILL.md` 发现本地 skills
 - 支持通过 stdio 动态加载 MCP tools
 - 支持通过通用 MCP helper tools 访问 resources 和 prompts
+- 支持隐私安全的运行追踪和确定性 agent-loop replay 评测
 
 ### 内置工具
 
@@ -159,6 +162,7 @@ MINI_CODE_MODEL_MODE=mock npm run dev
 - `minicode skills list`
 - `minicode skills add <path> [--name <name>] [--project]`
 - `minicode skills remove <name> [--project]`
+- `minicode eval <suite.json> [--output <report.json>]`
 
 ### 本地 slash 命令
 
@@ -262,6 +266,23 @@ MiniCode 现在把长会话作为一等工作流处理：
 MiniCode 提供默认关闭的结构化 JSONL trace，用于排查慢请求、工具失败和上下文压缩行为。可在 `~/.mini-code/settings.json` 中设置 `"trace": true`，或在启动时设置 `MINI_CODE_TRACE=1`。环境变量优先级更高，因此 `MINI_CODE_TRACE=0` 可临时关闭。
 
 trace 按项目写入 `~/.mini-code/traces/` 下的 JSONL 文件。输入 `/trace` 可查看当前状态和精确路径。每条事件包含顺序号、耗时、消息/工具调用计数、token usage、工具名称和结果状态。为避免诊断日志泄露代码或密钥，prompt 正文、模型回答、工具输入和工具输出均不会被记录。trace 写入异步串行化，记录器异常不会中断 agent loop。
+
+## 确定性 Replay 评测
+
+`minicode eval` 会把脚本化的模型步骤和工具结果送入真实 agent loop。因此无需调用在线模型，也能稳定复现工具顺序回归、重试行为、终止条件错误和 Token 预算变化：
+
+```bash
+minicode eval examples/eval-smoke.json --output eval-report.json
+```
+
+每个 JSON 套件使用 `schemaVersion: 1`，并包含一个或多个 case。case 提供用户 prompt、按顺序执行的 `modelSteps`、`toolResults` 和断言。支持的断言包括：
+
+- `outcome`：预期回合结果（默认为 `completed`）
+- `assistantIncludes`：最终回答必须包含的文本
+- `toolSequence`：严格有序的工具调用序列
+- `maxToolErrors`、`maxModelRequests` 和 `maxTotalTokens`：回归预算
+
+命令会输出简洁的通过/失败结果；任意 case 失败时返回非零退出码，并可选写入机器可读 JSON 报告。报告基于运行追踪使用的同一套 trace 事件生成，评测和可观测性共用同一记账路径。完整示例见 [examples/eval-smoke.json](./examples/eval-smoke.json)。
 
 ## 配置
 
@@ -486,6 +507,7 @@ MiniCode 当前主要支持：
 - `src/skills.ts`：本地 skill 发现与加载
 - `src/mcp.ts`：stdio MCP 客户端与动态工具封装
 - `src/manage-cli.ts`：顶层 `minicode mcp` / `minicode skills` 管理命令
+- `src/eval.ts`：确定性模型/工具 replay 与基于 trace 的回归报告
 - `src/session.ts`：追加写入的会话 JSONL、恢复/分叉/重命名、compact boundary 和过期清理
 - `src/compact/*`：手动压缩、自动压缩、上下文折叠投影层、确定性裁剪压缩和对话摘要辅助逻辑
 - `src/utils/token-estimator.ts`：provider usage 优先的上下文记账与本地估算 fallback

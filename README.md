@@ -135,6 +135,7 @@ MiniCode is a good fit if you want:
 - Review-before-write file edits with path and command permission checks.
 - Oversized tool results are stored on disk and replaced in context with a short preview and file path.
 - Privacy-safe opt-in JSONL runtime traces expose model/tool latency, failures, and context-compression behavior.
+- Deterministic model/tool replay evaluates the real agent loop with behavioral, error, request, and token budgets.
 
 Full command references, configuration examples, session details, and Skills/MCP usage have moved to the [Usage Guide](./USAGE.md).
 
@@ -191,7 +192,7 @@ MINI_CODE_MODEL_MODE=mock npm run dev
 - `/resume`: open the session picker.
 - `/compact`: manually compact the context.
 
-Management commands include `minicode mcp ...` and `minicode skills ...`. See [Commands](./USAGE.md#commands) for the full reference.
+Management commands include `minicode mcp ...`, `minicode skills ...`, and `minicode eval ...`. See [Commands](./USAGE.md#commands) for the full reference.
 
 ## Documentation
 

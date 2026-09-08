@@ -135,6 +135,7 @@ MiniCode 适合你，如果你想要：
 - 文件修改前先 review diff，并对路径和命令执行做权限检查。
 - 超大工具结果会落盘保存，并在上下文里替换成短预览和文件路径，减少长输出对对话空间的挤占。
 - 提供隐私安全、可选的 JSONL 运行追踪，用于分析模型/工具耗时、失败和上下文压缩行为。
+- 通过确定性模型/工具 replay 评测真实 agent loop，支持行为、错误、请求次数和 Token 预算断言。
 
 完整命令、配置示例、会话机制和 Skills/MCP 用法已经移到 [详细使用指南](./USAGE_ZH.md)。
 
@@ -191,7 +192,7 @@ MINI_CODE_MODEL_MODE=mock npm run dev
 - `/resume`：打开会话选择器。
 - `/compact`：手动压缩上下文。
 
-管理命令包括 `minicode mcp ...` 和 `minicode skills ...`，详见 [命令说明](./USAGE_ZH.md#命令)。
+管理命令包括 `minicode mcp ...`、`minicode skills ...` 和 `minicode eval ...`，详见 [命令说明](./USAGE_ZH.md#命令)。
 
 ## 文档导航
 

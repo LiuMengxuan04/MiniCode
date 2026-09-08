@@ -12,6 +12,8 @@ This document carries the manual-style content that used to live in the main REA
 - [Commands](#commands)
 - [Layered Memory and Project Initialization](#layered-memory-and-project-initialization)
 - [Long Sessions and Context Management](#long-sessions-and-context-management)
+- [Runtime Tracing](#runtime-tracing)
+- [Deterministic Replay Evaluation](#deterministic-replay-evaluation)
 - [Configuration](#configuration)
 - [Skills and MCP Usage](#skills-and-mcp-usage)
 - [Product Showcase Page](#product-showcase-page)
@@ -32,6 +34,7 @@ This document carries the manual-style content that used to live in the main REA
 - discoverable local skills via `SKILL.md`
 - dynamic MCP tool loading over stdio
 - MCP resources and prompts via generic MCP helper tools
+- privacy-safe runtime traces and deterministic agent-loop replay evaluation
 
 ### Built-in tools
 
@@ -160,6 +163,7 @@ MINI_CODE_MODEL_MODE=mock npm run dev
 - `minicode skills list`
 - `minicode skills add <path> [--name <name>] [--project]`
 - `minicode skills remove <name> [--project]`
+- `minicode eval <suite.json> [--output <report.json>]`
 
 ### Local slash commands
 
@@ -263,6 +267,23 @@ Session storage and context compression work together: `loadSession` resumes fro
 MiniCode includes opt-in structured JSONL tracing for investigating slow model requests, tool failures, and context-compression behavior. Enable it with `"trace": true` in `~/.mini-code/settings.json` or set `MINI_CODE_TRACE=1` when launching. The environment variable takes precedence, so `MINI_CODE_TRACE=0` temporarily disables tracing.
 
 Trace files are scoped by project under `~/.mini-code/traces/`. Run `/trace` to inspect the current status and exact output path. Events include sequence numbers, durations, message/tool-call counts, token usage, tool names, and result status. Prompt text, model responses, tool inputs, and tool outputs are deliberately excluded so source code and secrets do not leak into diagnostic logs. Writes are serialized asynchronously, and recorder failures never interrupt the agent loop.
+
+## Deterministic Replay Evaluation
+
+`minicode eval` runs scripted model steps and tool results through the real agent loop. This makes tool-order regressions, retry behavior, termination bugs, and token-budget changes reproducible without calling a live model:
+
+```bash
+minicode eval examples/eval-smoke.json --output eval-report.json
+```
+
+Each JSON suite uses `schemaVersion: 1` and contains one or more cases. A case provides a user prompt, ordered `modelSteps`, ordered `toolResults`, and expectations. Supported expectations are:
+
+- `outcome`: expected turn outcome (`completed` by default)
+- `assistantIncludes`: required substrings in the final answer
+- `toolSequence`: exact ordered tool-call sequence
+- `maxToolErrors`, `maxModelRequests`, and `maxTotalTokens`: regression budgets
+
+The command prints a compact pass/fail summary, exits non-zero when any case fails, and optionally writes a machine-readable JSON report. The report is derived from the same trace events used by runtime diagnostics, so evaluation and observability share one accounting path. See [examples/eval-smoke.json](./examples/eval-smoke.json) for a complete suite.
 
 ## Configuration
 
@@ -487,6 +508,7 @@ That means servers such as MiniMax MCP, which use newline-delimited JSON over st
 - `src/skills.ts`: local skill discovery and loading
 - `src/mcp.ts`: stdio MCP client and dynamic tool wrapping
 - `src/manage-cli.ts`: top-level `minicode mcp` / `minicode skills` management commands
+- `src/eval.ts`: deterministic model/tool replay and trace-backed regression reports
 - `src/session.ts`: append-only session JSONL, resume/fork/rename, compact boundaries, and expiry cleanup
 - `src/compact/*`: manual compact, auto-compact, context collapse projection layer, deterministic snip compact, and conversation summarization helpers
 - `src/utils/token-estimator.ts`: provider-usage-first context accounting with estimate fallback
