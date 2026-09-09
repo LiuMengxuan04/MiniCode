@@ -25,6 +25,7 @@ import {
   snipCompactConversation,
   type SnipCompactResult,
 } from './compact/snipCompact.js'
+import { requestWithPromptTooLongRecovery } from './prompt-too-long.js'
 import { computeContextStats } from './utils/token-estimator.js'
 import {
   applyToolResultBudget,
@@ -268,17 +269,37 @@ export async function runAgentTurnWithOutcome(args: AgentTurnArgs): Promise<Agen
         }
       }
 
-      if (args.plan) {
-        modelMessages = withPlanContext(modelMessages, args.plan.getSnapshot())
-        if (modelName) args.onContextStats?.(computeContextStats(modelMessages, modelName))
-      }
-
-      if (args.runtimeContext) modelMessages = withRuntimeContext(modelMessages, args.runtimeContext())
       throwIfAborted(args.signal)
-      const next = await model.next(modelMessages, {
-        tools: args.tools.list(),
-        signal: args.signal,
+      const requestResult = await requestWithPromptTooLongRecovery({
+        model: {
+          next(requestMessages, options) {
+            if (args.plan) {
+              requestMessages = withPlanContext(requestMessages, args.plan.getSnapshot())
+            }
+            if (args.runtimeContext) {
+              requestMessages = withRuntimeContext(requestMessages, args.runtimeContext())
+            }
+            if (modelName) args.onContextStats?.(computeContextStats(requestMessages, modelName))
+            return model.next(requestMessages, options)
+          },
+        },
+        modelName,
+        messages: modelMessages,
+        options: {
+          tools: args.tools.list(),
+          signal: args.signal,
+        },
+        onCompacted: async (compacted) => {
+          throwIfAborted(args.signal)
+          messages = compacted.messages
+          modelMessages = compacted.messages
+          snippedThisTurn = true
+          await args.onSnipCompact?.(compacted)
+          latestStats = computeContextStats(compacted.messages, modelName)
+          args.onContextStats?.(latestStats)
+        },
       })
+      const next = requestResult.step
       throwIfAborted(args.signal)
 
       if (next.type === 'assistant') {
