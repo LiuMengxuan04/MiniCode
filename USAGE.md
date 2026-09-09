@@ -87,7 +87,8 @@ This document carries the manual-style content that used to live in the main REA
 ## Installation Details
 
 ```bash
-cd mini-code
+git clone https://github.com/LiuMengxuan04/MiniCode.git
+cd MiniCode
 npm install
 npm run install-local
 ```

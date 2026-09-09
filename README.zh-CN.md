@@ -140,7 +140,8 @@ MiniCode 适合你，如果你想要：
 ## 安装
 
 ```bash
-cd mini-code
+git clone https://github.com/LiuMengxuan04/MiniCode.git
+cd MiniCode
 npm install
 npm run install-local
 ```

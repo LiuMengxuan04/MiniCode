@@ -86,7 +86,8 @@
 ## 安装细节
 
 ```bash
-cd mini-code
+git clone https://github.com/LiuMengxuan04/MiniCode.git
+cd MiniCode
 npm install
 npm run install-local
 ```
