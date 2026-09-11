@@ -203,8 +203,8 @@ export async function saveMiniCodeSettings(
 export async function loadRuntimeConfig(): Promise<RuntimeConfig> {
   const effectiveSettings = await loadEffectiveSettings()
   const env = {
-    ...(effectiveSettings.env ?? {}),
     ...process.env,
+    ...(effectiveSettings.env ?? {}),
   }
 
   const model =
