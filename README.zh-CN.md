@@ -43,7 +43,7 @@ MiniCode 围绕一个 terminal-first agent loop 构建：
 
 <table>
   <tr>
-    <td align="center" valign="top" width="20%">
+    <td align="center" valign="top" width="33.33%">
       <a href="https://github.com/LiuMengxuan04">
         <img src="https://github.com/LiuMengxuan04.png?size=160" width="96" height="96" alt="LiuMengxuan04" /><br />
         <strong>Liu Mengxuan</strong>
@@ -53,7 +53,7 @@ MiniCode 围绕一个 terminal-first agent loop 构建：
       <br />
       <sub>主导 TypeScript 主仓库、核心工作流、MCP/Skills、TUI 与文档。</sub>
     </td>
-    <td align="center" valign="top" width="20%">
+    <td align="center" valign="top" width="33.33%">
       <a href="https://github.com/GateJustice">
         <img src="https://github.com/GateJustice.png?size=160" width="96" height="96" alt="GateJustice" /><br />
         <strong>GateJustice</strong>
@@ -63,7 +63,19 @@ MiniCode 围绕一个 terminal-first agent loop 构建：
       <br />
       <sub>贡献长会话上下文系统，包括 usage 记账、自动压缩和 context collapse。</sub>
     </td>
-    <td align="center" valign="top" width="20%">
+    <td align="center" valign="top" width="33.33%">
+      <a href="https://github.com/sssn-tech">
+        <img src="https://github.com/sssn-tech.png?size=160" width="96" height="96" alt="sssn" /><br />
+        <strong>sssn</strong>
+      </a>
+      <br />
+      <sub><strong>核心贡献者</strong></sub>
+      <br />
+      <sub>贡献长程规划工作流（/goal、/loop 和 /plan）、多子代理编排能力与 TUI 视觉优化。</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" valign="top" width="33.33%">
       <a href="https://github.com/harkerhand">
         <img src="https://github.com/harkerhand.png?size=160" width="96" height="96" alt="harkerhand" /><br />
         <strong>harkerhand</strong>
@@ -73,7 +85,7 @@ MiniCode 围绕一个 terminal-first agent loop 构建：
       <br />
       <sub>Rust 版本主要作者。</sub>
     </td>
-    <td align="center" valign="top" width="20%">
+    <td align="center" valign="top" width="33.33%">
       <a href="https://github.com/QUSETIONS">
         <img src="https://github.com/QUSETIONS.png?size=160" width="96" height="96" alt="QUSETIONS" /><br />
         <strong>QUSETIONS</strong>
@@ -83,7 +95,7 @@ MiniCode 围绕一个 terminal-first agent loop 构建：
       <br />
       <sub>Python 版本主要作者。</sub>
     </td>
-    <td align="center" valign="top" width="20%">
+    <td align="center" valign="top" width="33.33%">
       <a href="https://github.com/GoDiao">
         <img src="https://github.com/GoDiao.png?size=160" width="96" height="96" alt="GoDiao" /><br />
         <strong>GoDiao</strong>

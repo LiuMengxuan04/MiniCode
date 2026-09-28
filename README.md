@@ -43,7 +43,7 @@ The project is intentionally compact, so the control flow, tool model, and TUI b
 
 <table>
   <tr>
-    <td align="center" valign="top" width="20%">
+    <td align="center" valign="top" width="33.33%">
       <a href="https://github.com/LiuMengxuan04">
         <img src="https://github.com/LiuMengxuan04.png?size=160" width="96" height="96" alt="LiuMengxuan04" /><br />
         <strong>Liu Mengxuan</strong>
@@ -53,7 +53,7 @@ The project is intentionally compact, so the control flow, tool model, and TUI b
       <br />
       <sub>Leads the TypeScript repo, core workflow, MCP/Skills, TUI, and docs.</sub>
     </td>
-    <td align="center" valign="top" width="20%">
+    <td align="center" valign="top" width="33.33%">
       <a href="https://github.com/GateJustice">
         <img src="https://github.com/GateJustice.png?size=160" width="96" height="96" alt="GateJustice" /><br />
         <strong>GateJustice</strong>
@@ -63,7 +63,19 @@ The project is intentionally compact, so the control flow, tool model, and TUI b
       <br />
       <sub>Contributes the long-session context system, including usage accounting, auto compact, and context collapse.</sub>
     </td>
-    <td align="center" valign="top" width="20%">
+    <td align="center" valign="top" width="33.33%">
+      <a href="https://github.com/sssn-tech">
+        <img src="https://github.com/sssn-tech.png?size=160" width="96" height="96" alt="sssn" /><br />
+        <strong>sssn</strong>
+      </a>
+      <br />
+      <sub><strong>Core contributor</strong></sub>
+      <br />
+      <sub>Contributes long-horizon planning workflows (/goal, /loop, and /plan), multi-sub-agent orchestration, and TUI visual refinements.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" valign="top" width="33.33%">
       <a href="https://github.com/harkerhand">
         <img src="https://github.com/harkerhand.png?size=160" width="96" height="96" alt="harkerhand" /><br />
         <strong>harkerhand</strong>
@@ -73,7 +85,7 @@ The project is intentionally compact, so the control flow, tool model, and TUI b
       <br />
       <sub>Main author of the Rust version.</sub>
     </td>
-    <td align="center" valign="top" width="20%">
+    <td align="center" valign="top" width="33.33%">
       <a href="https://github.com/QUSETIONS">
         <img src="https://github.com/QUSETIONS.png?size=160" width="96" height="96" alt="QUSETIONS" /><br />
         <strong>QUSETIONS</strong>
@@ -83,7 +95,7 @@ The project is intentionally compact, so the control flow, tool model, and TUI b
       <br />
       <sub>Main author of the Python version.</sub>
     </td>
-    <td align="center" valign="top" width="20%">
+    <td align="center" valign="top" width="33.33%">
       <a href="https://github.com/GoDiao">
         <img src="https://github.com/GoDiao.png?size=160" width="96" height="96" alt="GoDiao" /><br />
         <strong>GoDiao</strong>
