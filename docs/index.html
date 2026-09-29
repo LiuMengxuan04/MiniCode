@@ -282,6 +282,87 @@
       flex-wrap: wrap;
     }
 
+    /* Sponsor Banner */
+    .sponsor-banner {
+      padding: 0 0 20px;
+    }
+
+    .sponsor-card {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      flex-wrap: wrap;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-light);
+      border-left: 3px solid var(--accent);
+      border-radius: var(--radius-md);
+      padding: 20px 28px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .sponsor-badge {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--accent);
+      background: rgba(208, 91, 67, 0.08);
+      padding: 4px 10px;
+      border-radius: var(--radius-full);
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+
+    .sponsor-brand {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+      padding-right: 26px;
+      border-right: 1px solid var(--border-light);
+    }
+
+    .sponsor-logo {
+      height: 26px;
+      width: auto;
+      display: block;
+    }
+
+    .sponsor-body {
+      flex: 1;
+      min-width: 240px;
+    }
+
+    .sponsor-lead {
+      color: var(--text-primary);
+      font-size: 0.95rem;
+      line-height: 1.5;
+    }
+
+    .sponsor-note {
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+      margin-top: 4px;
+    }
+
+    .sponsor-cta {
+      flex-shrink: 0;
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .sponsor-cta:hover {
+      background: var(--accent-hover);
+      border-color: var(--accent-hover);
+    }
+
+    @media (max-width: 600px) {
+      .sponsor-card { justify-content: center; text-align: center; }
+      .sponsor-brand { border-right: none; padding-right: 0; }
+    }
+
     /* Terminal Window / Visual */
     .showcase {
       margin: 0 auto 100px;
@@ -651,6 +732,7 @@
       <div class="nav-links">
         <a href="#features" data-i18n="nav_features">Features</a>
         <a href="#architecture" data-i18n="nav_arch">Architecture</a>
+        <a href="https://fluxionai.space/register?source=github&campaign=github-minicode&promo=MINICODE" target="_blank" rel="noopener" style="color: var(--accent);" data-i18n="nav_sponsor">Sponsor</a>
         <button id="langToggle" class="lang-toggle">EN / 中</button>
         <a href="https://github.com/LiuMengxuan04/MiniCode" target="_blank" class="btn btn-secondary" style="padding: 6px 14px; font-size: 0.85rem;" data-i18n="nav_github">GitHub</a>
       </div>
@@ -695,6 +777,23 @@
         Multi-language roadmap: Rust, Python, Go, and Java versions are now available.
       </p>
     </header>
+
+    <!-- Sponsor Banner -->
+    <div class="sponsor-banner fade-up">
+      <div class="container">
+        <div class="sponsor-card">
+          <div class="sponsor-brand">
+            <img class="sponsor-logo" src="./fluxion-ai-logo.png" alt="Fluxion AI" />
+            <span class="sponsor-badge" data-i18n="sponsor_badge">Sponsored</span>
+          </div>
+          <div class="sponsor-body">
+            <p class="sponsor-lead" data-i18n="sponsor_lead" data-html="true"><strong>Fluxion AI</strong> provides unified API access to GPT, Claude, and other mainstream models — stable and more cost-effective.</p>
+            <p class="sponsor-note" data-i18n="sponsor_note">Register through the MiniCode exclusive link and receive a $3 API credit.</p>
+          </div>
+          <a class="btn sponsor-cta" href="https://fluxionai.space/register?source=github&campaign=github-minicode&promo=MINICODE" target="_blank" rel="noopener" data-i18n="sponsor_cta">Get $3 credit</a>
+        </div>
+      </div>
+    </div>
 
     <!-- Terminal Showcase -->
     <div class="showcase container fade-up delay-300">
@@ -981,6 +1080,15 @@
 
       </div>
 
+      <div style="margin-top: 56px; text-align: center;">
+        <a href="https://fluxionai.space/register?source=github&campaign=github-minicode&promo=MINICODE" target="_blank" rel="noopener" style="display: inline-block; margin-bottom: 14px;">
+          <img src="./fluxion-ai-logo.png" alt="Fluxion AI" style="height: 22px; width: auto; opacity: 0.85;" />
+        </a>
+        <p style="color: var(--text-tertiary); font-size: 0.85rem; text-align: center; line-height: 1.6;" data-i18n="foot_sponsor" data-html="true">
+          Sponsored by <a href="https://fluxionai.space/register?source=github&campaign=github-minicode&promo=MINICODE" target="_blank" rel="noopener" style="color: var(--accent); text-decoration: none;">Fluxion AI</a> · unified API access to GPT, Claude, and other mainstream models · $3 API credit via the MiniCode exclusive link
+        </p>
+      </div>
+
       <div style="margin-top: 60px; padding-top: 40px; border-top: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 20px;">
         <p style="color: var(--text-tertiary); font-size: 0.85rem;" data-i18n="foot_rights">© 2026 MiniCode. MIT Licensed.</p>
         <a href="https://www.star-history.com/#LiuMengxuan04/MiniCode&Date" target="_blank">
@@ -999,6 +1107,7 @@
         nav_arch: "Architecture",
         nav_roadmap: "Roadmap",
         nav_github: "GitHub",
+        nav_sponsor: "Sponsor",
         badge_beta: "Sessions, MCP, and long-context controls are available",
         hero_h1: "AI-powered coding assistant <br> built for <em>developers</em>",
         hero_desc: "Work with large language models directly in your terminal. Build, debug, and ship with an execution loop that keeps you in control, remembers your sessions, and manages long context as the work grows.",
@@ -1009,6 +1118,10 @@
         btn_go: "Go Version",
         btn_java: "Java Version",
         multi_lang_note: "Multi-language roadmap: Rust, Python, Go, and Java versions are now available.",
+        sponsor_badge: "Sponsored",
+        sponsor_lead: "<strong>Fluxion AI</strong> provides unified API access to GPT, Claude, and other mainstream models — stable and more cost-effective.",
+        sponsor_note: "Register through the MiniCode exclusive link and receive a $3 API credit.",
+        sponsor_cta: "Get $3 credit",
         t_header_desc: "Terminal coding assistant with a card-style session layout.",
         t_events: "6 events",
         t_feed: "session feed",
@@ -1087,7 +1200,8 @@
         foot_patterns: "Design Patterns",
         foot_contrib: "Contributing",
         foot_report: "Report an Issue",
-        foot_rights: "© 2026 MiniCode. MIT Licensed."
+        foot_rights: "© 2026 MiniCode. MIT Licensed.",
+        foot_sponsor: 'Sponsored by <a href="https://fluxionai.space/register?source=github&campaign=github-minicode&promo=MINICODE" target="_blank" rel="noopener" style="color: var(--accent); text-decoration: none;">Fluxion AI</a> · unified API access to GPT, Claude, and other mainstream models · $3 API credit via the MiniCode exclusive link'
       },
       zh: {
         page_title: "MiniCode | 极简终端 AI 编码助手",
@@ -1095,6 +1209,7 @@
         nav_arch: "架构地图",
         nav_roadmap: "演进路线",
         nav_github: "GitHub",
+        nav_sponsor: "赞助商",
         badge_beta: "会话、MCP 与长上下文控制现已可用",
         hero_h1: "专为 <em>开发者</em> 构建的<br>终端 AI 助手",
         hero_desc: "在终端中直接与 LLM 协同工作。把终端助手做「小」，但把核心闭环做「全」：保留 model-tool-loop、可恢复会话和长上下文管理，随时掌控每一次执行。",
@@ -1105,6 +1220,10 @@
         btn_go: "Go 版本",
         btn_java: "Java 版本",
         multi_lang_note: "多语言路线：Rust、Python、Go 与 Java 版本均已上线。",
+        sponsor_badge: "由 Fluxion AI 赞助",
+        sponsor_lead: "<strong>Fluxion AI</strong> 提供 GPT、Claude 等主流 AI 模型的统一 API 接入，稳定且更具成本优势。",
+        sponsor_note: "通过 MiniCode 专属链接注册，即可获得 3 美元 API 额度。",
+        sponsor_cta: "领取 3 美元额度",
         t_header_desc: "采用卡片式会话布局的终端编码助手。",
         t_events: "6 条事件",
         t_feed: "会话内容",
@@ -1183,7 +1302,8 @@
         foot_patterns: "设计模式",
         foot_contrib: "贡献指南",
         foot_report: "提交问题反馈",
-        foot_rights: "© 2026 MiniCode. 遵循 MIT 开源协议。"
+        foot_rights: "© 2026 MiniCode. 遵循 MIT 开源协议。",
+        foot_sponsor: '由 <a href="https://fluxionai.space/register?source=github&campaign=github-minicode&promo=MINICODE" target="_blank" rel="noopener" style="color: var(--accent); text-decoration: none;">Fluxion AI</a> 赞助 · GPT、Claude 等主流 AI 模型统一 API 接入 · 通过 MiniCode 专属链接注册可获得 3 美元 API 额度'
       }
     };
 
