@@ -13,6 +13,9 @@
   <a href="https://deepwiki.com/LiuMengxuan04/MiniCode">
     <img src="https://img.shields.io/badge/Ask-DeepWiki-0F7BBF?style=for-the-badge&labelColor=2B2B2B" alt="Ask DeepWiki" />
   </a>
+  <a href="https://fluxionai.space/register?source=github&campaign=github-minicode&promo=MINICODE">
+    <img src="https://img.shields.io/badge/Sponsor-Fluxion_AI-4F46E5?style=for-the-badge" alt="Sponsor: Fluxion AI" />
+  </a>
 </p>
 
 ---
@@ -26,6 +29,18 @@
 MiniCode is a lightweight terminal coding assistant for local development workflows.
 
 It provides Claude Code-like workflow and architectural ideas in a much smaller implementation, making it especially useful for learning, experimentation, and custom tooling.
+
+## Sponsor
+
+<p align="center">
+  <strong>Sponsored by <a href="https://fluxionai.space/register?source=github&campaign=github-minicode&promo=MINICODE">Fluxion AI</a></strong>
+</p>
+
+Fluxion AI provides unified API access to mainstream AI models such as GPT and Claude, stable and more cost-effective. Register through the exclusive MiniCode link below to receive a **$3 API credit**:
+
+<p align="center">
+  <a href="https://fluxionai.space/register?source=github&campaign=github-minicode&promo=MINICODE">👉 Claim your $3 API credit on Fluxion AI</a>
+</p>
 
 ## Overview
 
