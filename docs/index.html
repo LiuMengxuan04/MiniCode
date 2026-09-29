@@ -313,6 +313,22 @@
       white-space: nowrap;
     }
 
+    .sponsor-brand {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+      padding-right: 26px;
+      border-right: 1px solid var(--border-light);
+    }
+
+    .sponsor-logo {
+      height: 26px;
+      width: auto;
+      display: block;
+    }
+
     .sponsor-body {
       flex: 1;
       min-width: 240px;
@@ -344,6 +360,7 @@
 
     @media (max-width: 600px) {
       .sponsor-card { justify-content: center; text-align: center; }
+      .sponsor-brand { border-right: none; padding-right: 0; }
     }
 
     /* Terminal Window / Visual */
@@ -765,7 +782,10 @@
     <div class="sponsor-banner fade-up">
       <div class="container">
         <div class="sponsor-card">
-          <span class="sponsor-badge" data-i18n="sponsor_badge">Sponsored</span>
+          <div class="sponsor-brand">
+            <img class="sponsor-logo" src="./fluxion-ai-logo.png" alt="Fluxion AI" />
+            <span class="sponsor-badge" data-i18n="sponsor_badge">Sponsored</span>
+          </div>
           <div class="sponsor-body">
             <p class="sponsor-lead" data-i18n="sponsor_lead" data-html="true"><strong>Fluxion AI</strong> provides unified API access to GPT, Claude, and other mainstream models — stable and more cost-effective.</p>
             <p class="sponsor-note" data-i18n="sponsor_note">Register through the MiniCode exclusive link and receive a $3 API credit.</p>
@@ -1060,9 +1080,14 @@
 
       </div>
 
-      <p style="margin-top: 56px; color: var(--text-tertiary); font-size: 0.85rem; text-align: center; line-height: 1.6;" data-i18n="foot_sponsor" data-html="true">
-        Sponsored by <a href="https://fluxionai.space/register?source=github&campaign=github-minicode&promo=MINICODE" target="_blank" rel="noopener" style="color: var(--accent); text-decoration: none;">Fluxion AI</a> · unified API access to GPT, Claude, and other mainstream models · $3 API credit via the MiniCode exclusive link
-      </p>
+      <div style="margin-top: 56px; text-align: center;">
+        <a href="https://fluxionai.space/register?source=github&campaign=github-minicode&promo=MINICODE" target="_blank" rel="noopener" style="display: inline-block; margin-bottom: 14px;">
+          <img src="./fluxion-ai-logo.png" alt="Fluxion AI" style="height: 22px; width: auto; opacity: 0.85;" />
+        </a>
+        <p style="color: var(--text-tertiary); font-size: 0.85rem; text-align: center; line-height: 1.6;" data-i18n="foot_sponsor" data-html="true">
+          Sponsored by <a href="https://fluxionai.space/register?source=github&campaign=github-minicode&promo=MINICODE" target="_blank" rel="noopener" style="color: var(--accent); text-decoration: none;">Fluxion AI</a> · unified API access to GPT, Claude, and other mainstream models · $3 API credit via the MiniCode exclusive link
+        </p>
+      </div>
 
       <div style="margin-top: 60px; padding-top: 40px; border-top: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 20px;">
         <p style="color: var(--text-tertiary); font-size: 0.85rem;" data-i18n="foot_rights">© 2026 MiniCode. MIT Licensed.</p>

@@ -33,6 +33,12 @@ MiniCode 是一个面向本地开发工作流的轻量级终端编码助手。
 ## 赞助
 
 <p align="center">
+  <a href="https://fluxionai.space/register?source=github&campaign=github-minicode&promo=MINICODE">
+    <img src="./docs/fluxion-ai-logo.png" alt="Fluxion AI" width="180" />
+  </a>
+</p>
+
+<p align="center">
   <strong>由 <a href="https://fluxionai.space/register?source=github&campaign=github-minicode&promo=MINICODE">Fluxion AI</a> 赞助</strong>
 </p>
 

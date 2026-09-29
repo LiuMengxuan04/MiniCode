@@ -33,6 +33,12 @@ It provides Claude Code-like workflow and architectural ideas in a much smaller 
 ## Sponsor
 
 <p align="center">
+  <a href="https://fluxionai.space/register?source=github&campaign=github-minicode&promo=MINICODE">
+    <img src="./docs/fluxion-ai-logo.png" alt="Fluxion AI" width="180" />
+  </a>
+</p>
+
+<p align="center">
   <strong>Sponsored by <a href="https://fluxionai.space/register?source=github&campaign=github-minicode&promo=MINICODE">Fluxion AI</a></strong>
 </p>
 
