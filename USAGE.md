@@ -328,6 +328,27 @@ Configuration priority:
 4. compatible existing local settings
 5. process environment variables
 
+### Web search backends
+
+The built-in `web_search` tool tries search engines in order and falls back to
+the next one on failure:
+
+1. You.com (only when `YDC_API_KEY` is set)
+2. DuckDuckGo Lite (default)
+3. Sogou (default)
+
+You.com is opt-in. Export a You.com API key to use it first:
+
+```bash
+export YDC_API_KEY="your-key"
+```
+
+Get a key at <https://you.com/platform/api-keys>. Without the key, behavior is
+unchanged: `web_search` uses DuckDuckGo, then Sogou. If a You.com request fails
+or returns no results, MiniCode automatically falls back to the default
+engines, so existing workflows keep working even when the key is invalid or
+rate-limited.
+
 ## Skills and MCP Usage
 
 MiniCode supports two extension layers:

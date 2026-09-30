@@ -8,12 +8,25 @@ type SearchResult = {
   display_link: string
 }
 
-type SearchProvider = 'duckduckgo-lite' | 'sogou'
+type SearchProvider = 'duckduckgo-lite' | 'sogou' | 'youcom'
 
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MiniCode/0.1'
 const DEFAULT_TIMEOUT_MS = 12000
 const DEFAULT_MAX_RETRIES = 2
+
+/**
+ * Provider chain for the built-in web_search tool. You.com is opt-in and only
+ * tried first when YDC_API_KEY is set; DuckDuckGo and Sogou remain the defaults.
+ */
+export function getSearchProviders(): SearchProvider[] {
+  const providers: SearchProvider[] = []
+  if (String(process.env.YDC_API_KEY ?? '').trim().length > 0) {
+    providers.push('youcom')
+  }
+  providers.push('duckduckgo-lite', 'sogou')
+  return providers
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, Math.max(0, ms)))
@@ -139,7 +152,7 @@ export async function searchDuckDuckGoLite(options: {
   const blocked = normalizeDomainList(options.blockedDomains)
   const maxResults = options.maxResults ?? 5
   const errors: string[] = []
-  const providers: SearchProvider[] = ['duckduckgo-lite', 'sogou']
+  const providers: SearchProvider[] = getSearchProviders()
 
   for (const provider of providers) {
     try {
@@ -267,6 +280,22 @@ function fetchSearchPage(provider: SearchProvider, query: string): Promise<Respo
     return fetchWithRetry(url, { headers })
   }
 
+  if (provider === 'youcom') {
+    const apiKey = String(process.env.YDC_API_KEY ?? '').trim()
+    if (!apiKey) {
+      throw new Error('youcom provider requires YDC_API_KEY')
+    }
+    const url = new URL('https://api.ydc-index.io/search')
+    url.searchParams.set('query', query)
+    // The You.com endpoint is a JSON API, not a search results page.
+    return fetchWithRetry(url, {
+      headers: {
+        'X-API-Key': apiKey,
+        accept: 'application/json',
+      },
+    })
+  }
+
   throw new Error(`unsupported search provider: ${provider}`)
 }
 
@@ -275,7 +304,52 @@ function parseSearchResults(provider: SearchProvider, html: string): SearchResul
     return parseDuckDuckGoLite(html)
   }
 
+  if (provider === 'youcom') {
+    return parseYoucomResults(html)
+  }
+
   return parseSogouSearch(html)
+}
+
+type YoucomHit = {
+  title?: string
+  url?: string
+  snippets?: string[]
+  description?: string
+  published_date?: string
+}
+
+/**
+ * Parse the JSON response from the You.com Search API
+ * (https://api.ydc-index.io/search). Falls back to an empty list on malformed
+ * payloads so the provider chain can continue to the next engine.
+ */
+function parseYoucomResults(body: string): SearchResult[] {
+  let data: { hits?: YoucomHit[] }
+  try {
+    data = JSON.parse(body) as { hits?: YoucomHit[] }
+  } catch {
+    return []
+  }
+
+  const hits = Array.isArray(data.hits) ? data.hits : []
+  const results: SearchResult[] = []
+  for (const hit of hits) {
+    const link = typeof hit.url === 'string' ? hit.url : ''
+    const title = typeof hit.title === 'string' ? hit.title : link
+    if (!link || !title) continue
+    const snippets = Array.isArray(hit.snippets) ? hit.snippets.filter(s => typeof s === 'string') : []
+    const snippet = snippets.join(' ') || (typeof hit.description === 'string' ? hit.description : '')
+    const date = typeof hit.published_date === 'string' ? hit.published_date : ''
+    let displayLink = link
+    try {
+      displayLink = new URL(link).hostname
+    } catch {
+      // keep raw link as display
+    }
+    results.push({ title, link, snippet, date, display_link: displayLink })
+  }
+  return results
 }
 
 function parseDuckDuckGoLite(html: string): SearchResult[] {
