@@ -129,11 +129,13 @@ MiniCode can already extend itself through MCP, so built-in `WebFetch` / `WebSea
 
 ### 12. Evaluation and trace infrastructure
 
+**Status: structured trace capture and deterministic agent-loop replay evaluation are implemented; live-model benchmark suites remain planned.**
+
 This includes:
 
-- benchmark harnesses
-- structured trace capture
-- reproducible agent evaluation
+- live-model benchmark harnesses
+- structured trace capture (implemented, opt-in, with prompt/tool payloads excluded)
+- reproducible agent evaluation (deterministic model/tool replay implemented)
 
 This is valuable for research and comparison, but it is not on the critical path for the main product loop.
 

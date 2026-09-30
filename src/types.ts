@@ -119,3 +119,69 @@ export type CompressionResult = {
   tokensBefore: number
   tokensAfter: number
 }
+
+type TraceEventBase = {
+  timestamp: string
+}
+
+export type AgentTraceEvent =
+  | (TraceEventBase & {
+      type: 'trace_started'
+      cwd: string
+      pid: number
+    })
+  | (TraceEventBase & {
+      type: 'turn_started'
+      messageCount: number
+      toolCount: number
+    })
+  | (TraceEventBase & {
+      type: 'model_request_started'
+      step: number
+      messageCount: number
+      toolCount: number
+    })
+  | (TraceEventBase & {
+      type: 'model_request_completed'
+      step: number
+      durationMs: number
+      responseType: AgentStep['type']
+      contentChars: number
+      toolCallCount: number
+      stopReason?: string
+      usage?: ProviderUsage
+    })
+  | (TraceEventBase & {
+      type: 'model_request_failed'
+      step: number
+      durationMs: number
+      errorType: string
+    })
+  | (TraceEventBase & {
+      type: 'tool_completed'
+      step: number
+      toolName: string
+      durationMs: number
+      ok: boolean
+      outputChars: number
+    })
+  | (TraceEventBase & {
+      type: 'context_changed'
+      step: number
+      strategy: 'snip' | 'microcompact' | 'collapse' | 'auto_compact'
+      messageCount: number
+    })
+  | (TraceEventBase & {
+      type: 'turn_completed'
+      durationMs: number
+      stepCount: number
+      toolCallCount: number
+      toolErrorCount: number
+      outcome: 'completed' | 'awaiting_user' | 'max_steps' | 'failed' | 'aborted'
+    })
+
+export type AgentTraceEventInput = AgentTraceEvent extends infer TEvent
+  ? TEvent extends AgentTraceEvent
+    ? Omit<TEvent, 'timestamp'>
+    : never
+  : never

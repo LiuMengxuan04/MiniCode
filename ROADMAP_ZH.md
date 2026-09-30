@@ -129,11 +129,13 @@ MiniCode 现在已经可以通过 MCP 自我扩展，所以内置 `WebFetch` / `
 
 ### 12. 评测与 trace 基建
 
+**状态：结构化 trace 捕获和确定性 agent-loop replay 评测已实现；真实模型 benchmark 套件仍在规划中。**
+
 包括：
 
-- benchmark harness
-- 结构化 trace 捕获
-- 可复现 agent evaluation
+- 真实模型 benchmark harness
+- 结构化 trace 捕获（已实现，默认关闭且不记录 prompt/工具 payload）
+- 可复现 agent evaluation（已实现确定性模型/工具 replay）
 
 这对研究和比较非常有价值，但不属于主产品闭环的第一优先级。
 
