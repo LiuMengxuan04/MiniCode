@@ -26,6 +26,7 @@ export type ContextStats = {
   providerUsageTokens: number
   contextWindow: number
   effectiveInput: number
+  remainingTokens: number
   utilization: number
   warningLevel: 'normal' | 'warning' | 'critical' | 'blocked'
   accounting: TokenAccountingResult
@@ -181,6 +182,7 @@ export function computeContextStats(
   const window = getModelContextWindow(model)
   const accounting = tokenCountWithEstimation(messages)
   const utilization = Math.min(1, accounting.totalTokens / window.effectiveInput)
+  const remainingTokens = Math.max(0, window.effectiveInput - accounting.totalTokens)
 
   let warningLevel: ContextStats['warningLevel']
   if (utilization >= 0.95) {
@@ -199,6 +201,7 @@ export function computeContextStats(
     providerUsageTokens: accounting.providerUsageTokens,
     contextWindow: window.contextWindow,
     effectiveInput: window.effectiveInput,
+    remainingTokens,
     utilization,
     warningLevel,
     accounting,
