@@ -13,8 +13,8 @@
   <a href="https://deepwiki.com/LiuMengxuan04/MiniCode">
     <img src="https://img.shields.io/badge/Ask-DeepWiki-0F7BBF?style=for-the-badge&labelColor=2B2B2B" alt="Ask DeepWiki" />
   </a>
-  <a href="https://fluxionai.space/register?source=github&campaign=github-minicode&promo=MINICODE">
-    <img src="https://img.shields.io/badge/%E8%B5%9E%E5%8A%A9%E5%95%86-Fluxion_AI-4F46E5?style=for-the-badge" alt="赞助商：Fluxion AI" />
+  <a href="https://fluxionai.space/register?source=github&campaign=github-sidrune-minicode&promo=SDRMINICODE">
+    <img src="https://img.shields.io/badge/%E8%B5%9E%E5%8A%A9%E5%95%86-Sidrune_AI-4F46E5?style=for-the-badge" alt="赞助商：Sidrune AI" />
   </a>
 </p>
 
@@ -33,19 +33,19 @@ MiniCode 是一个面向本地开发工作流的轻量级终端编码助手。
 ## 赞助
 
 <p align="center">
-  <a href="https://fluxionai.space/register?source=github&campaign=github-minicode&promo=MINICODE">
-    <img src="./docs/fluxion-ai-logo.png" alt="Fluxion AI" width="180" />
+  <a href="https://fluxionai.space/register?source=github&campaign=github-sidrune-minicode&promo=SDRMINICODE">
+    <img src="./docs/sidrune-ai-banner.jpg" alt="Sidrune AI — 一个入口，接入全球主流 AI 模型，注册即送 3 美元 API 额度" width="760" />
   </a>
 </p>
 
 <p align="center">
-  <strong>由 <a href="https://fluxionai.space/register?source=github&campaign=github-minicode&promo=MINICODE">Fluxion AI</a> 赞助</strong>
+  <strong>由 <a href="https://fluxionai.space/register?source=github&campaign=github-sidrune-minicode&promo=SDRMINICODE">Sidrune AI</a> 赞助</strong>
 </p>
 
-Fluxion AI 提供 GPT、Claude 等主流 AI 模型的统一 API 接入，稳定且更具成本优势。通过 MiniCode 专属链接注册，可获得 **3 美元 API 额度**：
+Sidrune AI 提供 GPT、Claude 等主流 AI 模型的统一 API 接入，多线路选择，用量和费用清晰可查。通过 MiniCode 专属链接注册，即可获得 **3 美元 API 额度**（优惠码 `SDRMINICODE` 已自动带入）：
 
 <p align="center">
-  <a href="https://fluxionai.space/register?source=github&campaign=github-minicode&promo=MINICODE">👉 前往 Fluxion AI 领取 3 美元 API 额度</a>
+  <a href="https://fluxionai.space/register?source=github&campaign=github-sidrune-minicode&promo=SDRMINICODE">👉 前往 Sidrune AI 领取 3 美元 API 额度</a>
 </p>
 
 ## 项目简介

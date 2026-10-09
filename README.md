@@ -13,8 +13,8 @@
   <a href="https://deepwiki.com/LiuMengxuan04/MiniCode">
     <img src="https://img.shields.io/badge/Ask-DeepWiki-0F7BBF?style=for-the-badge&labelColor=2B2B2B" alt="Ask DeepWiki" />
   </a>
-  <a href="https://fluxionai.space/register?source=github&campaign=github-minicode&promo=MINICODE">
-    <img src="https://img.shields.io/badge/Sponsor-Fluxion_AI-4F46E5?style=for-the-badge" alt="Sponsor: Fluxion AI" />
+  <a href="https://fluxionai.space/register?source=github&campaign=github-sidrune-minicode&promo=SDRMINICODE">
+    <img src="https://img.shields.io/badge/Sponsor-Sidrune_AI-4F46E5?style=for-the-badge" alt="Sponsor: Sidrune AI" />
   </a>
 </p>
 
@@ -33,19 +33,19 @@ It provides Claude Code-like workflow and architectural ideas in a much smaller 
 ## Sponsor
 
 <p align="center">
-  <a href="https://fluxionai.space/register?source=github&campaign=github-minicode&promo=MINICODE">
-    <img src="./docs/fluxion-ai-logo.png" alt="Fluxion AI" width="180" />
+  <a href="https://fluxionai.space/register?source=github&campaign=github-sidrune-minicode&promo=SDRMINICODE">
+    <img src="./docs/sidrune-ai-banner.jpg" alt="Sidrune AI — one entry point for mainstream AI models, with a $3 API credit on signup" width="760" />
   </a>
 </p>
 
 <p align="center">
-  <strong>Sponsored by <a href="https://fluxionai.space/register?source=github&campaign=github-minicode&promo=MINICODE">Fluxion AI</a></strong>
+  <strong>Sponsored by <a href="https://fluxionai.space/register?source=github&campaign=github-sidrune-minicode&promo=SDRMINICODE">Sidrune AI</a></strong>
 </p>
 
-Fluxion AI provides unified API access to mainstream AI models such as GPT and Claude, stable and more cost-effective. Register through the exclusive MiniCode link below to receive a **$3 API credit**:
+Sidrune AI provides unified API access to mainstream AI models such as GPT and Claude, with multiple routes and transparent usage and pricing. Register through the exclusive MiniCode link below and get a **$3 API credit** (promo code `SDRMINICODE` is applied automatically):
 
 <p align="center">
-  <a href="https://fluxionai.space/register?source=github&campaign=github-minicode&promo=MINICODE">👉 Claim your $3 API credit on Fluxion AI</a>
+  <a href="https://fluxionai.space/register?source=github&campaign=github-sidrune-minicode&promo=SDRMINICODE">👉 Claim your $3 API credit on Sidrune AI</a>
 </p>
 
 ## Overview

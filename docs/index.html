@@ -284,23 +284,12 @@
 
     /* Sponsor Banner */
     .sponsor-banner {
-      padding: 0 0 20px;
+      padding: 0 0 24px;
     }
 
-    .sponsor-card {
-      display: flex;
+    .sponsor-tag {
+      display: inline-flex;
       align-items: center;
-      gap: 24px;
-      flex-wrap: wrap;
-      background: var(--bg-surface);
-      border: 1px solid var(--border-light);
-      border-left: 3px solid var(--accent);
-      border-radius: var(--radius-md);
-      padding: 20px 28px;
-      box-shadow: var(--shadow-sm);
-    }
-
-    .sponsor-badge {
       font-family: var(--font-mono);
       font-size: 0.7rem;
       text-transform: uppercase;
@@ -309,58 +298,47 @@
       background: rgba(208, 91, 67, 0.08);
       padding: 4px 10px;
       border-radius: var(--radius-full);
-      flex-shrink: 0;
+      margin-bottom: 12px;
       white-space: nowrap;
     }
 
-    .sponsor-brand {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 10px;
-      flex-shrink: 0;
-      padding-right: 26px;
-      border-right: 1px solid var(--border-light);
-    }
-
-    .sponsor-logo {
-      height: 26px;
-      width: auto;
+    .sponsor-image-link {
       display: block;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+      transition: box-shadow 0.3s ease, transform 0.3s ease, border-color 0.3s ease;
     }
 
-    .sponsor-body {
-      flex: 1;
-      min-width: 240px;
+    .sponsor-image-link:hover {
+      box-shadow: var(--shadow-md);
+      border-color: var(--border-medium);
+      transform: translateY(-2px);
     }
 
-    .sponsor-lead {
-      color: var(--text-primary);
-      font-size: 0.95rem;
-      line-height: 1.5;
+    .sponsor-image {
+      display: block;
+      width: 100%;
+      height: auto;
     }
 
-    .sponsor-note {
+    .sponsor-caption {
+      margin-top: 14px;
       color: var(--text-secondary);
       font-size: 0.9rem;
-      margin-top: 4px;
+      line-height: 1.6;
     }
 
-    .sponsor-cta {
-      flex-shrink: 0;
-      background: var(--accent);
-      border-color: var(--accent);
-      color: #fff;
+    .sponsor-caption a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 500;
     }
 
-    .sponsor-cta:hover {
-      background: var(--accent-hover);
-      border-color: var(--accent-hover);
-    }
-
-    @media (max-width: 600px) {
-      .sponsor-card { justify-content: center; text-align: center; }
-      .sponsor-brand { border-right: none; padding-right: 0; }
+    .sponsor-caption a:hover {
+      text-decoration: underline;
     }
 
     /* Terminal Window / Visual */
@@ -732,7 +710,7 @@
       <div class="nav-links">
         <a href="#features" data-i18n="nav_features">Features</a>
         <a href="#architecture" data-i18n="nav_arch">Architecture</a>
-        <a href="https://fluxionai.space/register?source=github&campaign=github-minicode&promo=MINICODE" target="_blank" rel="noopener" style="color: var(--accent);" data-i18n="nav_sponsor">Sponsor</a>
+        <a href="https://fluxionai.space/register?source=github&campaign=github-sidrune-minicode&promo=SDRMINICODE" target="_blank" rel="noopener" style="color: var(--accent);" data-i18n="nav_sponsor">Sponsor</a>
         <button id="langToggle" class="lang-toggle">EN / 中</button>
         <a href="https://github.com/LiuMengxuan04/MiniCode" target="_blank" class="btn btn-secondary" style="padding: 6px 14px; font-size: 0.85rem;" data-i18n="nav_github">GitHub</a>
       </div>
@@ -781,17 +759,13 @@
     <!-- Sponsor Banner -->
     <div class="sponsor-banner fade-up">
       <div class="container">
-        <div class="sponsor-card">
-          <div class="sponsor-brand">
-            <img class="sponsor-logo" src="./fluxion-ai-logo.png" alt="Fluxion AI" />
-            <span class="sponsor-badge" data-i18n="sponsor_badge">Sponsored</span>
-          </div>
-          <div class="sponsor-body">
-            <p class="sponsor-lead" data-i18n="sponsor_lead" data-html="true"><strong>Fluxion AI</strong> provides unified API access to GPT, Claude, and other mainstream models — stable and more cost-effective.</p>
-            <p class="sponsor-note" data-i18n="sponsor_note">Register through the MiniCode exclusive link and receive a $3 API credit.</p>
-          </div>
-          <a class="btn sponsor-cta" href="https://fluxionai.space/register?source=github&campaign=github-minicode&promo=MINICODE" target="_blank" rel="noopener" data-i18n="sponsor_cta">Get $3 credit</a>
-        </div>
+        <span class="sponsor-tag" data-i18n="sponsor_badge">Sponsored</span>
+        <a class="sponsor-image-link" href="https://fluxionai.space/register?source=github&campaign=github-sidrune-minicode&promo=SDRMINICODE" target="_blank" rel="noopener">
+          <img class="sponsor-image" src="./sidrune-ai-banner.jpg" alt="Sidrune AI — 一个入口，接入全球主流 AI 模型" />
+        </a>
+        <p class="sponsor-caption" data-i18n="sponsor_caption" data-html="true">
+          Sponsored by <a href="https://fluxionai.space/register?source=github&campaign=github-sidrune-minicode&promo=SDRMINICODE" target="_blank" rel="noopener">Sidrune AI</a> — one API for GPT, Claude, and other mainstream models. Register via the MiniCode link for a $3 API credit (promo code <code>SDRMINICODE</code>).
+        </p>
       </div>
     </div>
 
@@ -1081,11 +1055,8 @@
       </div>
 
       <div style="margin-top: 56px; text-align: center;">
-        <a href="https://fluxionai.space/register?source=github&campaign=github-minicode&promo=MINICODE" target="_blank" rel="noopener" style="display: inline-block; margin-bottom: 14px;">
-          <img src="./fluxion-ai-logo.png" alt="Fluxion AI" style="height: 22px; width: auto; opacity: 0.85;" />
-        </a>
         <p style="color: var(--text-tertiary); font-size: 0.85rem; text-align: center; line-height: 1.6;" data-i18n="foot_sponsor" data-html="true">
-          Sponsored by <a href="https://fluxionai.space/register?source=github&campaign=github-minicode&promo=MINICODE" target="_blank" rel="noopener" style="color: var(--accent); text-decoration: none;">Fluxion AI</a> · unified API access to GPT, Claude, and other mainstream models · $3 API credit via the MiniCode exclusive link
+          Sponsored by <a href="https://fluxionai.space/register?source=github&campaign=github-sidrune-minicode&promo=SDRMINICODE" target="_blank" rel="noopener" style="color: var(--accent); text-decoration: none;">Sidrune AI</a> · one API for GPT, Claude, and other mainstream models · $3 API credit via the MiniCode exclusive link
         </p>
       </div>
 
@@ -1119,9 +1090,7 @@
         btn_java: "Java Version",
         multi_lang_note: "Multi-language roadmap: Rust, Python, Go, and Java versions are now available.",
         sponsor_badge: "Sponsored",
-        sponsor_lead: "<strong>Fluxion AI</strong> provides unified API access to GPT, Claude, and other mainstream models — stable and more cost-effective.",
-        sponsor_note: "Register through the MiniCode exclusive link and receive a $3 API credit.",
-        sponsor_cta: "Get $3 credit",
+        sponsor_caption: 'Sponsored by <a href="https://fluxionai.space/register?source=github&campaign=github-sidrune-minicode&promo=SDRMINICODE" target="_blank" rel="noopener">Sidrune AI</a> — one API for GPT, Claude, and other mainstream models. Register via the MiniCode link for a $3 API credit (promo code <code>SDRMINICODE</code>).',
         t_header_desc: "Terminal coding assistant with a card-style session layout.",
         t_events: "6 events",
         t_feed: "session feed",
@@ -1201,7 +1170,7 @@
         foot_contrib: "Contributing",
         foot_report: "Report an Issue",
         foot_rights: "© 2026 MiniCode. MIT Licensed.",
-        foot_sponsor: 'Sponsored by <a href="https://fluxionai.space/register?source=github&campaign=github-minicode&promo=MINICODE" target="_blank" rel="noopener" style="color: var(--accent); text-decoration: none;">Fluxion AI</a> · unified API access to GPT, Claude, and other mainstream models · $3 API credit via the MiniCode exclusive link'
+        foot_sponsor: 'Sponsored by <a href="https://fluxionai.space/register?source=github&campaign=github-sidrune-minicode&promo=SDRMINICODE" target="_blank" rel="noopener" style="color: var(--accent); text-decoration: none;">Sidrune AI</a> · one API for GPT, Claude, and other mainstream models · $3 API credit via the MiniCode exclusive link'
       },
       zh: {
         page_title: "MiniCode | 极简终端 AI 编码助手",
@@ -1220,10 +1189,8 @@
         btn_go: "Go 版本",
         btn_java: "Java 版本",
         multi_lang_note: "多语言路线：Rust、Python、Go 与 Java 版本均已上线。",
-        sponsor_badge: "由 Fluxion AI 赞助",
-        sponsor_lead: "<strong>Fluxion AI</strong> 提供 GPT、Claude 等主流 AI 模型的统一 API 接入，稳定且更具成本优势。",
-        sponsor_note: "通过 MiniCode 专属链接注册，即可获得 3 美元 API 额度。",
-        sponsor_cta: "领取 3 美元额度",
+        sponsor_badge: "由 Sidrune AI 赞助",
+        sponsor_caption: '由 <a href="https://fluxionai.space/register?source=github&campaign=github-sidrune-minicode&promo=SDRMINICODE" target="_blank" rel="noopener">Sidrune AI</a> 赞助 — 一个 API 接入 GPT、Claude 等主流 AI 模型，多线路选择，用量和费用清晰可查。通过 MiniCode 专属链接注册即送 3 美元 API 额度（优惠码 <code>SDRMINICODE</code>）。',
         t_header_desc: "采用卡片式会话布局的终端编码助手。",
         t_events: "6 条事件",
         t_feed: "会话内容",
@@ -1303,7 +1270,7 @@
         foot_contrib: "贡献指南",
         foot_report: "提交问题反馈",
         foot_rights: "© 2026 MiniCode. 遵循 MIT 开源协议。",
-        foot_sponsor: '由 <a href="https://fluxionai.space/register?source=github&campaign=github-minicode&promo=MINICODE" target="_blank" rel="noopener" style="color: var(--accent); text-decoration: none;">Fluxion AI</a> 赞助 · GPT、Claude 等主流 AI 模型统一 API 接入 · 通过 MiniCode 专属链接注册可获得 3 美元 API 额度'
+        foot_sponsor: '由 <a href="https://fluxionai.space/register?source=github&campaign=github-sidrune-minicode&promo=SDRMINICODE" target="_blank" rel="noopener" style="color: var(--accent); text-decoration: none;">Sidrune AI</a> 赞助 · 一个 API 接入 GPT、Claude 等主流 AI 模型 · 通过 MiniCode 专属链接注册可获得 3 美元 API 额度'
       }
     };
 
