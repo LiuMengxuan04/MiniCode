@@ -253,6 +253,7 @@ MiniCode now treats long-running conversations as a first-class workflow:
 - `/compact` performs manual context compression using snip compact or context collapse and records a compact boundary in the session log.
 - Automatic compaction can summarize or snip older turns once utilization gets high, using either **snip compact** (deterministic middle-history removal that protects edits and errors) or **context collapse** (projection-layer summarization of conversation spans).
 - After compaction, retained pre-compact usage is marked stale so an old provider total is not mistaken for the current context size.
+- If the Anthropic-compatible endpoint returns a recognized HTTP 400 prompt-too-long error, MiniCode attempts deterministic snip compaction and retries up to twice, without an extra summarization request. If no history can be safely trimmed or retries are exhausted, the request error is reported. Plan and runtime context remain request-only, and cancellation still stops the retry.
 - Oversized tool results are written to `~/.mini-code/tool-results/` and replaced in the visible context with a preview and the full-output path. A single result over `50_000` characters is persisted, and batches are reduced toward a `200_000` character visible budget.
 
 Session storage and context compression work together: `loadSession` resumes from the latest compact boundary, while `loadTranscript` can still rebuild the visible transcript from the JSONL event log.
