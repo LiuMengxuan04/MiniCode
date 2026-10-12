@@ -3,6 +3,7 @@ import process from 'node:process'
 import type { RuntimeConfig } from '../config.js'
 import type { SlashCommand } from '../cli-commands.js'
 import type { PermissionRequest } from '../permissions.js'
+import type { ContextStats } from '../utils/token-estimator.js'
 
 const RESET = '\u001b[0m'
 const DIM = '\u001b[2m'
@@ -82,6 +83,23 @@ function colorBadge(
   color: string,
 ): string {
   return `${color}[${label}]${RESET} ${BOLD}${value}${RESET}`
+}
+
+function formatCompactTokenCount(tokens: number): string {
+  const value = Math.max(0, Math.floor(tokens))
+  if (value < 1_000) return String(value)
+  if (value < 1_000_000) {
+    const thousands = Math.round(value / 1_000)
+    return thousands >= 1_000 ? formatCompactMillionTokenCount(value) : `${thousands}K`
+  }
+
+  return formatCompactMillionTokenCount(value)
+}
+
+function formatCompactMillionTokenCount(value: number): string {
+  const millions = value / 1_000_000
+  const formatted = millions.toFixed(1).replace(/\.0$/, '')
+  return `${formatted}M`
 }
 
 function joinSegmentsWithinWidth(
@@ -214,6 +232,7 @@ export function renderPanel(
 export function renderContextBadge(stats: {
   utilization: number
   warningLevel: 'normal' | 'warning' | 'critical' | 'blocked'
+  remainingTokens: number
   accounting?: {
     providerUsageTokens: number
     estimatedTokens: number
@@ -233,6 +252,7 @@ export function renderContextBadge(stats: {
 
   const filled = Math.round(utilization * 10)
   const bar = '\u2593'.repeat(filled) + '\u2591'.repeat(10 - filled)
+  const headroom = ` ${formatCompactTokenCount(stats.remainingTokens)} left`
   const sourceLabel =
     accounting?.source === 'provider_usage'
       ? 'usage'
@@ -243,7 +263,7 @@ export function renderContextBadge(stats: {
           : ''
   const suffix = sourceLabel ? ` ${sourceLabel}` : ''
 
-  return colorBadge('ctx', `${percent}% ${bar}${suffix}`, color)
+  return colorBadge('ctx', `${percent}% ${bar}${headroom}${suffix}`, color)
 }
 
 export function renderBanner(
@@ -258,15 +278,7 @@ export function renderBanner(
     mcpConnectedCount: number
     mcpConnectingCount: number
     mcpErrorCount: number
-    contextStats?: {
-      utilization: number
-      warningLevel: 'normal' | 'warning' | 'critical' | 'blocked'
-      accounting?: {
-        providerUsageTokens: number
-        estimatedTokens: number
-        source: 'provider_usage' | 'provider_usage_plus_estimate' | 'estimate_only'
-      }
-    } | null
+    contextStats?: ContextStats | null
   },
 ): string {
   const panelWidth = Math.max(60, process.stdout.columns ?? 100)
