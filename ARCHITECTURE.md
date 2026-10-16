@@ -43,6 +43,8 @@ In other words, MiniCode is a smaller, more controllable terminal coding assista
 
 - `src/index.ts`: CLI entry
 - `src/agent-loop.ts`: multi-turn tool-calling loop
+- `src/trace.ts`: privacy-safe structured runtime events and JSONL persistence
+- `src/eval.ts`: deterministic model/tool replay against the real agent loop
 - `src/agents/manager.ts`: in-memory sub-agent lifecycle, concurrency limit, waiting, and cancellation
 - `src/agents/worker-prompt.ts`: minimal read-only worker system prompt
 - `src/tools/sub-agents.ts`: root-only `spawn_agent`, `list_agents`, `wait_agent`, and `close_agent` tools
@@ -52,7 +54,7 @@ In other words, MiniCode is a smaller, more controllable terminal coding assista
 - `src/skills.ts`: scans `.mini-code/skills` and compatible `.claude/skills` directories
 - `src/mcp.ts`: launches stdio MCP servers, negotiates framing compatibility, and wraps remote MCP tools into local tool definitions
 - `src/background-tasks.ts`: minimal background shell task registry used by `run_command` and the TUI
-- `src/manage-cli.ts`: manages persisted MCP configs and installed local skills
+- `src/manage-cli.ts`: manages MCP configs, installed local skills, and replay eval runs
 - `src/anthropic-adapter.ts`: Anthropic-compatible Messages API adapter with thinking-block preservation across tool-call turns
 - `src/utils/token-estimator.ts`: structured token accounting. Provider-reported usage is the primary source when available; local estimation is reserved for missing usage and for tail messages after the latest provider usage boundary.
 - `src/utils/tool-result-storage.ts`: persists oversized tool results under MiniCode's local data directory, replaces visible context with a preview plus path, and reuses stable replacements across a run.

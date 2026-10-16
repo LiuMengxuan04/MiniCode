@@ -3,6 +3,8 @@ import type {
   ChatMessage,
   AgentTurnResult,
   AgentTurnOutcome,
+  AgentTraceEvent,
+  AgentTraceEventInput,
   CompressionResult,
   ModelAdapter,
   ProviderThinkingBlock,
@@ -36,6 +38,17 @@ import {
 
 function isEmptyAssistantResponse(content: string): boolean {
   return content.trim().length === 0
+}
+
+function emitTrace(
+  listener: ((event: AgentTraceEvent) => void) | undefined,
+  event: AgentTraceEvent,
+): void {
+  try {
+    listener?.(event)
+  } catch {
+    // Diagnostics must never interrupt the agent loop.
+  }
 }
 
 function withProviderUsage<T extends ChatMessage>(
@@ -137,6 +150,7 @@ export type AgentTurnArgs = {
   plan?: PlanManager
   runtimeContext?: () => string
   stopOnFatalToolError?: boolean
+  onTrace?: (event: AgentTraceEvent) => void
 }
 
 export async function runAgentTurn(args: AgentTurnArgs): Promise<ChatMessage[]> {
@@ -152,7 +166,31 @@ export async function runAgentTurnWithOutcome(args: AgentTurnArgs): Promise<Agen
   const modelName = args.modelName ?? ''
   let messages = args.messages
   let toolCalls = 0
-  const finish = (outcome: AgentTurnOutcome, error?: string): AgentTurnResult => ({ messages, outcome, toolCalls, ...(error ? { error } : {}) })
+  let toolErrorCount = 0
+  let completedSteps = 0
+  const startedAt = Date.now()
+  const trace = (event: AgentTraceEventInput) => {
+    emitTrace(args.onTrace, {
+      ...event,
+      timestamp: new Date().toISOString(),
+    } as AgentTraceEvent)
+  }
+  const finish = (outcome: AgentTurnOutcome, error?: string): AgentTurnResult => {
+    trace({
+      type: 'turn_completed',
+      durationMs: Date.now() - startedAt,
+      stepCount: completedSteps,
+      toolCallCount: toolCalls,
+      toolErrorCount,
+      outcome: outcome === 'final' || outcome === 'controlled_stop' ? 'completed' : outcome,
+    })
+    return { messages, outcome, toolCalls, ...(error ? { error } : {}) }
+  }
+  trace({
+    type: 'turn_started',
+    messageCount: args.messages.length,
+    toolCount: args.tools.list().length,
+  })
   const model: ModelAdapter = args.signal ? {
     next(request, options) {
       throwIfAborted(args.signal)
@@ -161,7 +199,6 @@ export async function runAgentTurnWithOutcome(args: AgentTurnArgs): Promise<Agen
   } : args.model
   let emptyResponseRetryCount = 0
   let recoverableThinkingRetryCount = 0
-  let toolErrorCount = 0
   let sawToolResultThisTurn = false
   let snippedThisTurn = false
   const contentReplacementState =
@@ -202,6 +239,7 @@ export async function runAgentTurnWithOutcome(args: AgentTurnArgs): Promise<Agen
 
   try {
     for (let step = 0; maxSteps == null || step < maxSteps; step++) {
+      completedSteps = step + 1
       throwIfAborted(args.signal)
       let latestStats: import('./utils/token-estimator.js').ContextStats | null = null
       let modelMessages = messages
@@ -221,6 +259,12 @@ export async function runAgentTurnWithOutcome(args: AgentTurnArgs): Promise<Agen
             await args.onSnipCompact?.(snipResult)
             latestStats = computeContextStats(messages, modelName)
             args.onContextStats?.(latestStats)
+            trace({
+              type: 'context_changed',
+              step,
+              strategy: 'snip',
+              messageCount: messages.length,
+            })
           }
         }
 
@@ -229,6 +273,12 @@ export async function runAgentTurnWithOutcome(args: AgentTurnArgs): Promise<Agen
         if (messages !== beforeMicrocompact) {
           latestStats = computeContextStats(messages, modelName)
           args.onContextStats?.(latestStats)
+          trace({
+            type: 'context_changed',
+            step,
+            strategy: 'microcompact',
+            messageCount: messages.length,
+          })
         }
 
         const collapseResult = await applyContextCollapseIfNeeded(
@@ -244,6 +294,12 @@ export async function runAgentTurnWithOutcome(args: AgentTurnArgs): Promise<Agen
           await args.onContextCollapse?.(collapseResult)
           latestStats = computeContextStats(modelMessages, modelName)
           args.onContextStats?.(latestStats)
+          trace({
+            type: 'context_changed',
+            step,
+            strategy: 'collapse',
+            messageCount: modelMessages.length,
+          })
         } else if (modelMessages !== messages) {
           latestStats = computeContextStats(modelMessages, modelName)
           args.onContextStats?.(latestStats)
@@ -264,6 +320,12 @@ export async function runAgentTurnWithOutcome(args: AgentTurnArgs): Promise<Agen
             await args.onAutoCompact?.(result)
             latestStats = computeContextStats(messages, modelName)
             args.onContextStats?.(latestStats)
+            trace({
+              type: 'context_changed',
+              step,
+              strategy: 'auto_compact',
+              messageCount: messages.length,
+            })
           }
         }
       }
@@ -275,9 +337,37 @@ export async function runAgentTurnWithOutcome(args: AgentTurnArgs): Promise<Agen
 
       if (args.runtimeContext) modelMessages = withRuntimeContext(modelMessages, args.runtimeContext())
       throwIfAborted(args.signal)
-      const next = await model.next(modelMessages, {
-        tools: args.tools.list(),
-        signal: args.signal,
+      const modelStartedAt = Date.now()
+      trace({
+        type: 'model_request_started',
+        step,
+        messageCount: modelMessages.length,
+        toolCount: args.tools.list().length,
+      })
+      let next
+      try {
+        next = await model.next(modelMessages, {
+          tools: args.tools.list(),
+          signal: args.signal,
+        })
+      } catch (error) {
+        trace({
+          type: 'model_request_failed',
+          step,
+          durationMs: Date.now() - modelStartedAt,
+          errorType: error instanceof Error ? error.name : typeof error,
+        })
+        throw error
+      }
+      trace({
+        type: 'model_request_completed',
+        step,
+        durationMs: Date.now() - modelStartedAt,
+        responseType: next.type,
+        contentChars: next.content?.length ?? 0,
+        toolCallCount: next.type === 'tool_calls' ? next.calls.length : 0,
+        stopReason: next.diagnostics?.stopReason,
+        usage: next.usage,
       })
       throwIfAborted(args.signal)
 
@@ -436,6 +526,7 @@ export async function runAgentTurnWithOutcome(args: AgentTurnArgs): Promise<Agen
         if (batchOutcome || args.signal?.aborted) continue
         toolCalls++
         args.onToolStart?.(call.toolName, call.input)
+        const toolStartedAt = Date.now()
         const result = await args.tools.execute(
           call.toolName,
           call.input,
@@ -445,6 +536,14 @@ export async function runAgentTurnWithOutcome(args: AgentTurnArgs): Promise<Agen
         if (!result.ok) {
           toolErrorCount += 1
         }
+        trace({
+          type: 'tool_completed',
+          step,
+          toolName: call.toolName,
+          durationMs: Date.now() - toolStartedAt,
+          ok: result.ok,
+          outputChars: result.output.length,
+        })
         messages = messages.map(message => message.role === 'tool_result' && message.toolUseId === call.id
           ? { ...message, content: result.output, isError: !result.ok } : message)
         args.onToolResult?.(call.toolName, result.output, !result.ok)

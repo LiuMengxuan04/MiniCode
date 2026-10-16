@@ -23,4 +23,17 @@ describe('tryHandleLocalCommand', () => {
       ].join('\n'),
     )
   })
+
+  it('reports trace privacy guarantees and output path', async () => {
+    const result = await tryHandleLocalCommand('/trace', {
+      traceStatus: {
+        enabled: true,
+        filePath: '/tmp/trace.jsonl',
+      },
+    })
+
+    assert.match(result ?? '', /tracing: enabled/)
+    assert.match(result ?? '', /\/tmp\/trace\.jsonl/)
+    assert.match(result ?? '', /tool inputs.*not recorded/)
+  })
 })

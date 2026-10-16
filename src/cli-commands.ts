@@ -11,6 +11,7 @@ import { discoverInstructionFiles, renderMemoryReport } from './memory.js'
 import type { ToolRegistry } from './tool.js'
 import type { PlanManager } from './plan/manager.js'
 import { formatPlan } from './plan/context.js'
+import type { TraceStatus } from './trace.js'
 
 export type SlashCommand = {
   name: string
@@ -47,6 +48,11 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     name: '/status',
     usage: '/status',
     description: 'Show current model and config source.',
+  },
+  {
+    name: '/trace',
+    usage: '/trace',
+    description: 'Show privacy-safe runtime trace status and output path.',
   },
   {
     name: '/model',
@@ -201,6 +207,7 @@ export async function tryHandleLocalCommand(
     tools?: ToolRegistry
     permissionSummary?: string[]
     plan?: PlanManager
+    traceStatus?: TraceStatus
   },
 ): Promise<string | null> {
   const cwd = context?.cwd ?? process.cwd()
@@ -232,6 +239,22 @@ export async function tryHandleLocalCommand(
 
   if (input === '/permissions') {
     return formatPermissionSummary(context?.permissionSummary)
+  }
+
+  if (input === '/trace') {
+    const status = context?.traceStatus
+    if (!status?.enabled) {
+      return [
+        'Tracing is disabled. Set MINI_CODE_TRACE=1 or trace=true in ~/.mini-code/settings.json, then restart MiniCode.',
+        ...(status?.error ? [`configuration error: ${status.error}`] : []),
+      ].join('\n')
+    }
+    return [
+      'tracing: enabled',
+      `file: ${status.filePath ?? 'initializing'}`,
+      'privacy: prompt content, tool inputs, and tool outputs are not recorded',
+      ...(status.error ? [`write error: ${status.error}`] : []),
+    ].join('\n')
   }
 
   if (input === '/skills') {
