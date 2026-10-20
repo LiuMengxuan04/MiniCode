@@ -314,6 +314,7 @@ export class AnthropicModelAdapter implements ModelAdapter {
     const maxOutputTokens = resolveMaxOutputTokens(
       runtime.model,
       runtime.maxOutputTokens,
+      runtime.baseUrl,
     )
 
     const headers: Record<string, string> = {

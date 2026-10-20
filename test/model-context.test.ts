@@ -43,6 +43,13 @@ describe('getModelContextWindow', () => {
     assert.equal(result.outputReserve, 4_000)
   })
 
+  it('returns MiniMax-M3.1-Flash window with one-million context', () => {
+    const result = getModelContextWindow('MiniMax-M3.1-Flash')
+    assert.equal(result.contextWindow, 1_000_000)
+    assert.equal(result.outputReserve, 16_000)
+    assert.equal(result.effectiveInput, 984_000)
+  })
+
   it('returns MiniMax-M3 window with one-million context', () => {
     const result = getModelContextWindow('MiniMax-M3')
     assert.equal(result.contextWindow, 1_000_000)

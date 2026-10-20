@@ -285,6 +285,22 @@ Example configuration:
 }
 ```
 
+For MiniMax text requests, configure `MiniMax-M3.1-Flash` (recommended) or `MiniMax-M3` explicitly:
+
+```json
+{
+  "model": "MiniMax-M3.1-Flash",
+  "env": {
+    "ANTHROPIC_BASE_URL": "https://api.minimax.io/anthropic",
+    "ANTHROPIC_AUTH_TOKEN": "your-token"
+  }
+}
+```
+
+For the China endpoint, use `https://api.minimaxi.com/anthropic`. Both models have a 1,000,000-token context window. Both keep the default 32,000-token output budget; `maxOutputTokens` can raise it up to 524,288 on these direct endpoints. Thinking tokens count toward this budget. The adapter omits thinking and effort controls: Flash always thinks with the API's default `max` effort, while M3 thinking is off by default. Thinking blocks are retained across tool calls. See the [MiniMax API reference](https://platform.minimax.io/docs/api-reference/text-anthropic-api).
+
+MiniCode continues to require an explicit model. Saved legacy IDs and custom endpoints remain unchanged; gateway limits are not inferred from direct API limits.
+
 Project-scoped MCP config is also supported through Claude Code compatible `.mcp.json`:
 
 ```json

@@ -118,7 +118,7 @@ const MODEL_CONTEXT_RULES: ModelContextRule[] = [
     outputReserve: 4_000,
   },
   {
-    patterns: ['minimax-m3'],
+    patterns: ['minimax-m3.1-flash', 'minimax-m3'],
     contextWindow: 1_000_000,
     outputReserve: 16_000,
   },

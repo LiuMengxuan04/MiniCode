@@ -88,8 +88,14 @@ const MODEL_MAX_OUTPUT_TOKEN_RULES: ModelMaxOutputTokenRule[] = [
   },
 ]
 
-export function getModelMaxOutputTokens(model: string): ModelMaxOutputTokens {
+export function getModelMaxOutputTokens(model: string, baseUrl?: string): ModelMaxOutputTokens {
   const normalized = model.trim().toLowerCase()
+  if (
+    (normalized === 'minimax-m3.1-flash' || normalized === 'minimax-m3') &&
+    /^https:\/\/api\.(minimax\.io|minimaxi\.com)\/anthropic\/?$/.test(baseUrl ?? '')
+  ) {
+    return { default: 32_000, upperLimit: 524_288 }
+  }
   for (const rule of MODEL_MAX_OUTPUT_TOKEN_RULES) {
     if (rule.patterns.some(pattern => normalized.includes(pattern))) {
       return rule.limits
@@ -102,8 +108,9 @@ export function getModelMaxOutputTokens(model: string): ModelMaxOutputTokens {
 export function resolveMaxOutputTokens(
   model: string,
   configuredMaxOutputTokens?: number,
+  baseUrl?: string,
 ): number {
-  const limits = getModelMaxOutputTokens(model)
+  const limits = getModelMaxOutputTokens(model, baseUrl)
   if (
     configuredMaxOutputTokens !== undefined &&
     Number.isFinite(configuredMaxOutputTokens) &&
