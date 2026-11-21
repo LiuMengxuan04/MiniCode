@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "name": "agent-loop-smoke",
+  "cases": [
+    {
+      "id": "read-then-answer",
+      "prompt": "Read package.json and report the package name.",
+      "modelSteps": [
+        {
+          "type": "tool_calls",
+          "calls": [
+            {
+              "id": "call-1",
+              "toolName": "read_file",
+              "input": { "path": "package.json" }
+            }
+          ],
+          "usage": {
+            "inputTokens": 120,
+            "outputTokens": 20,
+            "totalTokens": 140,
+            "source": "fixture"
+          }
+        },
+        {
+          "type": "assistant",
+          "content": "The package name is mini-code.",
+          "usage": {
+            "inputTokens": 180,
+            "outputTokens": 12,
+            "totalTokens": 192,
+            "source": "fixture"
+          }
+        }
+      ],
+      "toolResults": [
+        {
+          "toolName": "read_file",
+          "ok": true,
+          "output": "{\"name\":\"mini-code\"}"
+        }
+      ],
+      "expect": {
+        "assistantIncludes": ["mini-code"],
+        "toolSequence": ["read_file"],
+        "maxToolErrors": 0,
+        "maxModelRequests": 2,
+        "maxTotalTokens": 400
+      }
+    }
+  ]
+}

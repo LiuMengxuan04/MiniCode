@@ -45,6 +45,8 @@ MiniCode 优先保留这些能力：
 
 - `src/index.ts`: CLI 入口
 - `src/agent-loop.ts`: 多轮工具调用循环
+- `src/trace.ts`: 隐私安全的结构化运行事件与 JSONL 持久化
+- `src/eval.ts`: 在真实 agent loop 上执行确定性模型/工具 replay
 - `src/agents/manager.ts`: 内存态 sub-agent 生命周期、并发上限、等待与取消
 - `src/agents/worker-prompt.ts`: 只读 worker 的最小系统提示词
 - `src/tools/sub-agents.ts`: root agent 使用的 `spawn_agent` / `list_agents` / `wait_agent` / `close_agent`
@@ -54,7 +56,7 @@ MiniCode 优先保留这些能力：
 - `src/skills.ts`: 扫描 `.mini-code/skills` 和兼容的 `.claude/skills` 目录
 - `src/mcp.ts`: 启动 stdio MCP server，协商兼容的 framing，并把远端 MCP tools 封装成当前工具协议
 - `src/background-tasks.ts`: 给 `run_command` 和 TUI 使用的最小 background shell task 注册表
-- `src/manage-cli.ts`: 管理持久化 MCP 配置和本地安装的 skills
+- `src/manage-cli.ts`: 管理 MCP 配置、本地 skills 和 replay eval 执行
 - `src/anthropic-adapter.ts`: Anthropic 兼容 Messages API 适配器，支持跨工具调用轮次保留 thinking block
 - `src/utils/token-estimator.ts`: 结构化 token accounting。provider-reported usage 可用时作为主数据源；本地估算只用于缺失 usage 的 fallback，以及最新 provider usage boundary 之后的 tail messages。
 - `src/utils/tool-result-storage.ts`: 将超大工具结果持久化到 MiniCode 本地数据目录，并在可见上下文里替换成预览和文件路径；同一次运行中会复用稳定替换结果。

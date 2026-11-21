@@ -9,6 +9,7 @@ import {
   type WaitForSubAgentsResult,
 } from './types.js'
 import { buildSubAgentPrompt } from './worker-prompt.js'
+import type { TraceRecorder } from '../trace.js'
 
 type SubAgentRecord = SubAgentSnapshot & {
   controller: AbortController
@@ -19,6 +20,7 @@ type SubAgentManagerOptions = {
   model: ModelAdapter
   tools: ToolRegistry
   cwd: string
+  traceRecorder?: TraceRecorder
 }
 
 export class SubAgentManager {
@@ -145,6 +147,11 @@ export class SubAgentManager {
         cwd: this.options.cwd,
         maxSteps: MAX_SUB_AGENT_STEPS,
         signal: record.controller.signal,
+        onTrace: this.options.traceRecorder
+          ? event => this.options.traceRecorder?.record(event, {
+              agentId: record.id,
+            })
+          : undefined,
       })
 
       if (record.status !== 'closed') {

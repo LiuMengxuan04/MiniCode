@@ -32,6 +32,7 @@ import {
   createContextCollapseState,
 } from './compact/context-collapse.js'
 import { createContentReplacementState } from './utils/tool-result-storage.js'
+import { createTraceRecorder } from './trace.js'
 
 async function main(): Promise<void> {
   const cwd = process.cwd()
@@ -65,6 +66,7 @@ async function main(): Promise<void> {
     return
   }
 
+  const traceRecorder = await createTraceRecorder({ cwd })
   const isInteractiveTerminal = Boolean(process.stdin.isTTY && process.stdout.isTTY)
   let runtime = null
   try {
@@ -97,6 +99,7 @@ async function main(): Promise<void> {
     model,
     tools: tools.subset(SUB_AGENT_TOOL_NAMES),
     cwd,
+    traceRecorder,
   })
   tools.addTools(createSubAgentTools(subAgents))
   let messages: ChatMessage[] = [
@@ -152,6 +155,7 @@ async function main(): Promise<void> {
         sessionId,
         alreadySavedCount: 0,
         resumeTarget: resolvedResumeTarget,
+        traceRecorder,
       })
       return
     }
@@ -185,6 +189,7 @@ async function main(): Promise<void> {
             stopOnFatalToolError: !!request.mode,
             modelName: runtime?.model ?? '', contentReplacementState, contextCollapseState,
             onAssistantMessage: content => console.log(`\n${content}\n`),
+            onTrace: event => traceRecorder.record(event, { sessionId: 'stdio' }),
           })
           messages = result.messages
           if (result.error) console.log(`\n${result.error}\n`)
@@ -280,6 +285,7 @@ async function main(): Promise<void> {
             tools,
             plan,
             permissionSummary: permissions.getSummary(),
+            traceStatus: traceRecorder.status(),
           })
           if (localCommandResult !== null) {
             console.log(`\n${localCommandResult}\n`)
@@ -326,6 +332,7 @@ async function main(): Promise<void> {
     await subAgents.closeAll()
     await mcpHydration
     await tools.dispose()
+    await traceRecorder.flush()
   }
 }
 
