@@ -12,6 +12,7 @@ import type { RuntimeConfig } from './config.js'
 import { resolveMaxOutputTokens } from './utils/context.js'
 import { buildAnthropicSnipBoundaryText } from './compact/snipCompact.js'
 import { abortableDelay, throwIfAborted } from './abort.js'
+import { ModelRequestError } from './utils/errors.js'
 
 const DEFAULT_MAX_RETRIES = 4
 const BASE_RETRY_DELAY_MS = 500
@@ -373,7 +374,10 @@ export class AnthropicModelAdapter implements ModelAdapter {
     }
 
     if (!response.ok) {
-      throw new Error(extractErrorMessage(data, response.status))
+      throw new ModelRequestError(
+        extractErrorMessage(data, response.status),
+        response.status,
+      )
     }
 
     const toolCalls: ToolCall[] = []
