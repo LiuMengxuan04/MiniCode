@@ -97,6 +97,7 @@ describe('computeContextStats', () => {
     assert.ok(stats.estimatedTokens > 0)
     assert.equal(stats.contextWindow, 200_000)
     assert.equal(stats.effectiveInput, 184_000)
+    assert.equal(stats.remainingTokens, stats.effectiveInput - stats.totalTokens)
   })
 
   it('computes blocked warning level for large messages', () => {
@@ -109,6 +110,7 @@ describe('computeContextStats', () => {
       `expected blocked or critical, got ${stats.warningLevel}`,
     )
     assert.equal(stats.utilization, 1, 'utilization should be capped at 1')
+    assert.equal(stats.remainingTokens, 0)
   })
 
   it('computes warning level for medium messages', () => {
@@ -133,6 +135,7 @@ describe('computeContextStats', () => {
     ]
     const stats = computeContextStats(messages, 'deepseek-chat')
     assert.equal(stats.utilization, 1)
+    assert.equal(stats.remainingTokens, 0)
   })
 })
 
