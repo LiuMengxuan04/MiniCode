@@ -284,7 +284,11 @@ MiniCode 现在把长会话作为一等工作流处理：
 }
 ```
 
-也支持 Claude Code 风格的项目级 `.mcp.json`：
+也支持 Claude Code 风格的项目级 `.mcp.json`，但默认不会加载它，因为它可以从当前仓库启动本地命令。确认信任该项目后再显式启用：
+
+```bash
+MINI_CODE_TRUST_PROJECT_MCP=1 minicode
+```
 
 ```json
 {
@@ -323,7 +327,7 @@ Skills 默认会从这些位置发现：
 
 1. `~/.mini-code/settings.json`
 2. `~/.mini-code/mcp.json`
-3. 项目级 `.mcp.json`
+3. 设置 `MINI_CODE_TRUST_PROJECT_MCP=1` 时的项目级 `.mcp.json`
 4. 兼容的本地已有配置
 5. 当前进程环境变量
 

@@ -285,7 +285,13 @@ Example configuration:
 }
 ```
 
-Project-scoped MCP config is also supported through Claude Code compatible `.mcp.json`:
+Project-scoped MCP config is also supported through Claude Code compatible `.mcp.json`,
+but it is not loaded by default because it can spawn local commands from the
+current repository. Use it only after you trust the project:
+
+```bash
+MINI_CODE_TRUST_PROJECT_MCP=1 minicode
+```
 
 ```json
 {
@@ -324,7 +330,7 @@ Configuration priority:
 
 1. `~/.mini-code/settings.json`
 2. `~/.mini-code/mcp.json`
-3. project `.mcp.json`
+3. project `.mcp.json` when `MINI_CODE_TRUST_PROJECT_MCP=1`
 4. compatible existing local settings
 5. process environment variables
 

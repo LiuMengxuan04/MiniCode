@@ -44,6 +44,14 @@ export const MINI_CODE_MCP_TOKENS_PATH = path.join(MINI_CODE_DIR, 'mcp-tokens.js
 export const MINI_CODE_PROJECTS_DIR = path.join(MINI_CODE_DIR, 'projects')
 export const CLAUDE_SETTINGS_PATH = path.join(os.homedir(), '.claude', 'settings.json')
 export const PROJECT_MCP_PATH = path.join(process.cwd(), '.mcp.json')
+const TRUST_PROJECT_MCP_ENV = 'MINI_CODE_TRUST_PROJECT_MCP'
+
+export function shouldLoadProjectMcpConfig(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  const value = String(env[TRUST_PROJECT_MCP_ENV] ?? '').trim().toLowerCase()
+  return value === '1' || value === 'true' || value === 'yes' || value === 'on'
+}
 
 export async function readMcpTokensFile(
   filePath = MINI_CODE_MCP_TOKENS_PATH,
@@ -170,18 +178,24 @@ function mergeSettings(
   }
 }
 
-export async function loadEffectiveSettings(): Promise<MiniCodeSettings> {
-  const [claudeSettings, globalMcpConfig, projectMcpConfig, miniCodeSettings] =
+export async function loadEffectiveSettings(
+  options: { cwd?: string; env?: NodeJS.ProcessEnv } = {},
+): Promise<MiniCodeSettings> {
+  const cwd = options.cwd ?? process.cwd()
+  const projectMcpConfig = shouldLoadProjectMcpConfig(options.env)
+    ? readMcpConfigFile(getMcpConfigPath('project', cwd))
+    : Promise.resolve({})
+  const [claudeSettings, globalMcpConfig, trustedProjectMcpConfig, miniCodeSettings] =
     await Promise.all([
       readSettingsFile(CLAUDE_SETTINGS_PATH),
       readMcpConfigFile(MINI_CODE_MCP_PATH),
-      readMcpConfigFile(PROJECT_MCP_PATH),
+      projectMcpConfig,
       readSettingsFile(MINI_CODE_SETTINGS_PATH),
     ])
   return mergeSettings(
     mergeSettings(
       mergeSettings(claudeSettings, { mcpServers: globalMcpConfig }),
-      { mcpServers: projectMcpConfig },
+      { mcpServers: trustedProjectMcpConfig },
     ),
     miniCodeSettings,
   )
@@ -246,6 +260,8 @@ export async function loadRuntimeConfig(): Promise<RuntimeConfig> {
     apiKey,
     maxOutputTokens,
     mcpServers: effectiveSettings.mcpServers ?? {},
-    sourceSummary: `config: ${MINI_CODE_SETTINGS_PATH} > ${CLAUDE_SETTINGS_PATH} > process.env`,
+    sourceSummary: `config: ${MINI_CODE_SETTINGS_PATH} > ${CLAUDE_SETTINGS_PATH}${
+      shouldLoadProjectMcpConfig() ? ' > project .mcp.json' : ''
+    } > process.env`,
   }
 }
